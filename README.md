@@ -6,11 +6,12 @@ App de página única (HTML) para mudar o **número da camisa** dos jogadores no
 ## Usar
 1. Faça **backup** da pasta `Android/data/com.ea.game.fifa14_row/files`.
 2. Abra `index.html` no navegador (ou pelo GitHub Pages: *Settings → Pages → branch `main`*).
-3. Escolha o arquivo `SAVECAREER...`.
+3. Passo 1: escolha o `fifa.db` (nomes de jogadores e times; fica salvo no navegador).
+3. Passo 2: escolha o arquivo `SAVECAREER...`.
 4. Escolha o time. Para achar o jogador recém-contratado, use **"Descobrir o jogador que acabei de contratar"** com um save antigo: quem é novo no time aparece com a etiqueta NOVO.
 5. Mude o número, toque em **Baixar save editado** e coloque o arquivo de volta na pasta do jogo (mesmo nome).
 
-O save guarda só IDs. Toque no nome de um jogador para nomeá-lo (fica salvo no navegador), ou importe uma lista `p,ID,Nome` / `t,ID,Nome`.
+O save guarda só IDs; o `fifa.db` traduz ID → nome (busque jogador por nome ou ID). Para corrigir um nome, toque nele de um jogador para nomeá-lo (fica salvo no navegador), ou importe uma lista `p,ID,Nome` / `t,ID,Nome`.
 
 ## Comando `gitpush`
 ```sh

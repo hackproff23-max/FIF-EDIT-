@@ -31,10 +31,18 @@ details summary{cursor:pointer;font-weight:600}
 </head>
 <body>
 <h1>⚽ FIF-EDIT · Camisas FIFA 14</h1>
-<p class="s">Edita só o número da camisa do save da carreira. Funciona offline no navegador.</p>
+<p class="s">Edita só o número da camisa do save da carreira. Carregue o fifa.db para ver nomes de jogadores e times. Funciona offline no navegador.</p>
 
 <div class="card">
-  <h2>1. Save da carreira</h2>
+  <h2>1. Arquivo fifa.db (nomes)</h2>
+  <div class="note">Escolha o <b>fifa.db</b> do jogo. Ele traz os nomes de todos os jogadores e times, e o app liga cada ID do save ao nome certo. Só precisa fazer uma vez (fica salvo no navegador).</div>
+  <input id="fd" type="file" hidden><button class="btn" id="pickdb">Escolher fifa.db</button>
+  <div class="note" id="dbs"></div>
+  <div class="warn" id="dbe"></div>
+</div>
+
+<div class="card">
+  <h2>2. Save da carreira</h2>
   <div class="note">Faça backup da pasta do jogo. Escolha o arquivo <b>SAVECAREER…</b></div>
   <input id="f" type="file" hidden><button class="btn" id="pick">Escolher SAVECAREER</button>
   <div class="warn" id="err"></div>
@@ -42,18 +50,19 @@ details summary{cursor:pointer;font-weight:600}
 
 <div id="ed" hidden>
   <div class="card">
-    <h2>2. Achar o time e o jogador</h2>
+    <h2>3. Achar o time e o jogador</h2>
     <label for="tm">Time</label><select id="tm"></select>
     <button class="btn sec" id="rt">Dar nome a este time</button>
-    <label for="pq">Ir ao time de um jogador (ID)</label>
-    <input class="in" id="pq" type="number" inputmode="numeric" placeholder="ex.: 207865">
+    <label for="pq">Ir ao time de um jogador (nome ou ID)</label>
+    <input class="in" id="pq" type="text" placeholder="ex.: Neymar ou 190871">
+    <div id="pr"></div>
     <details style="margin-top:10px"><summary>Descobrir o jogador que acabei de contratar</summary>
       <div class="note" style="margin:6px 0">Escolha um save <b>antigo</b> (de antes da contratação). Quem não estava nesse time aparece como <span class="tag" style="margin:0">NOVO</span> no topo da lista.</div>
       <input id="f2" type="file" hidden><button class="btn sec" id="pick2">Escolher save antigo</button>
       <div class="note" id="cmp"></div>
     </details>
     <details style="margin-top:10px"><summary>Nomes de jogadores e times</summary>
-      <div class="note" style="margin:6px 0">O save só tem IDs. Toque no nome de um jogador para nomeá-lo. Ou importe uma lista, uma por linha: <code>p,ID,Nome</code> (jogador) ou <code>t,ID,Nome</code> (time).</div>
+      <div class="note" style="margin:6px 0">Com o fifa.db carregado os nomes vêm sozinhos. Para corrigir um nome, toque nele. Ou importe uma lista, uma por linha: <code>p,ID,Nome</code> (jogador) ou <code>t,ID,Nome</code> (time).</div>
       <textarea class="in" id="ta" placeholder="p,207865,Fulano&#10;t,73,Meu Time"></textarea>
       <button class="btn sec" id="imp">Importar lista</button>
       <button class="btn sec" id="exp">Copiar meus nomes</button>
@@ -71,8 +80,47 @@ var $=function(i){return document.getElementById(i)};
 try{N=JSON.parse(localStorage.getItem('fifnames'))||N}catch(e){}
 function sv(){try{localStorage.setItem('fifnames',JSON.stringify(N))}catch(e){}}
 function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
-function pn(p){return N.p[p]||'Jogador '+p}
-function tn(t){return N.t[t]||'Time '+t}
+var DB={p:{},t:{}};
+try{DB=JSON.parse(localStorage.getItem('fifdb'))||DB}catch(e){}
+function pn(p){return N.p[p]||DB.p[p]||'Jogador '+p}
+function tn(t){return N.t[t]||DB.t[t]||'Time '+t}
+function rs(b,dv,p){
+  if(!p||p+2>b.length)return null;var n=dv.getUint16(p,true);if(n>80||p+2+n>b.length)return null;
+  var e=p+2,t=e;while(t<e+n&&b[t])t++;
+  try{return new TextDecoder().decode(b.subarray(e,t))}catch(x){return null}
+}
+function parseDb(b){
+  var dv=new DataView(b.buffer,b.byteOffset,b.byteLength),L=b.length;
+  if(L<400)return null;
+  var nt=dv.getUint32(8,true);if(nt<5||nt>2000||12+4*nt>L)return null;
+  var offs=[];for(var i=0;i<nt;i++)offs.push(dv.getUint32(12+4*i,true));
+  var P=null,T=null;
+  for(var i=0;i<nt;i++){
+    var o=offs[i],nx=i+1<nt?offs[i+1]:L;if(o+8>L||nx<=o)continue;
+    var c=dv.getUint32(o,true),sz=nx-o;
+    if(!P&&c>1000&&sz===c*72+8){
+      var ok=0,ch=0;
+      for(var k=0;k<c;k+=Math.max(1,c/60|0)){var r=o+8+72*k;ch++;
+        var a=rs(b,dv,dv.getUint32(r+4,true)),z=rs(b,dv,dv.getUint32(r+8,true)),m=rs(b,dv,dv.getUint32(r+12,true));
+        if(a!==null&&z!==null&&m!==null&&(a||z||m))ok++}
+      if(ok>=ch*0.95){P={};
+        for(var k=0;k<c;k++){var r=o+8+72*k,id=dv.getUint32(r,true);
+          var f=rs(b,dv,dv.getUint32(r+4,true))||'',l=rs(b,dv,dv.getUint32(r+8,true))||'',m=rs(b,dv,dv.getUint32(r+12,true))||'';
+          var full=(f+' '+l).trim(),nm=full||m;
+          if(m&&full&&full.indexOf(m)<0)nm+=' ('+m+')';
+          if(nm)P[id]=nm}}
+    }else if(!T&&c>100&&c<5000&&sz===c*44+8){
+      var ok=0,ch=0;
+      for(var k=0;k<c;k+=Math.max(1,c/40|0)){var r=o+8+44*k;ch++;
+        var a=rs(b,dv,dv.getUint32(r+4,true));if(a)ok++}
+      if(ok>=ch*0.95){T={};
+        for(var k=0;k<c;k++){var r=o+8+44*k,a=rs(b,dv,dv.getUint32(r+4,true));if(a)T[dv.getUint32(r,true)]=a}}
+    }
+  }
+  return(P&&T)?{p:P,t:T}:null;
+}
+function dbInfo(){var np=Object.keys(DB.p).length,nt=Object.keys(DB.t).length;
+  $('dbs').textContent=np?('fifa.db carregado: '+np+' jogadores e '+nt+' times.'):''}
 
 function parse(b){
   var dv=new DataView(b.buffer,b.byteOffset,b.byteLength);
@@ -90,6 +138,14 @@ function parse(b){
 }
 function readF(inp,cb){var f=inp.files[0];if(!f)return;var r=new FileReader();r.onload=function(){cb(new Uint8Array(r.result),f.name)};r.readAsArrayBuffer(f);inp.value=''}
 
+$('pickdb').onclick=function(){$('fd').click()};
+$('fd').onchange=function(){readF(this,function(b){
+  var r=null;try{r=parseDb(b)}catch(e){}
+  if(!r){$('dbe').textContent='Não consegui ler esse arquivo como fifa.db (tabelas de jogadores/times não encontradas).';return}
+  $('dbe').textContent='';DB=r;
+  try{localStorage.setItem('fifdb',JSON.stringify(DB))}catch(e){$('dbe').textContent='Nomes carregados, mas o navegador não deixou salvar; recarregue o fifa.db na próxima vez.'}
+  dbInfo();if(S){fillTeams();draw()}
+})};
 $('pick').onclick=function(){$('f').click()};
 $('f').onchange=function(){readF(this,function(b,n){
   var s=parse(b);if(!s){$('err').textContent='Não achei a tabela de jogadores. É mesmo o SAVECAREER?';return}
@@ -97,6 +153,9 @@ $('f').onchange=function(){readF(this,function(b,n){
   cur=s.rows.map(function(r){return r.n});orig=cur.slice();
   ct=S.teams[73]?73:+Object.keys(S.teams)[0];
   fillTeams();$('ed').hidden=false;$('bar').hidden=false;draw();upd();
+  if(Object.keys(DB.p).length){var m=0,u={};s.rows.forEach(function(r){if(!u[r.p]){u[r.p]=1;if(DB.p[r.p])m++}});
+    var tot=Object.keys(u).length;$('err').textContent='';$('dbs').textContent='fifa.db: '+m+' de '+tot+' jogadores do save reconhecidos.'}
+  else $('err').textContent='Dica: carregue o fifa.db no passo 1 para ver os nomes.';
 })};
 function fillTeams(){
   var ids=Object.keys(S.teams).map(Number).sort(function(a,b){return a-b});
@@ -134,7 +193,18 @@ function nch(){var c=0;for(var i=0;i<cur.length;i++)if(cur[i]!==orig[i])c++;retu
 function upd(){var c=nch();$('cnt').textContent=c+(c===1?' alteração':' alterações');$('dl').disabled=!c}
 $('tm').onchange=function(){ct=+this.value;draw()};
 $('rt').onclick=function(){var v=prompt('Nome do time '+ct+':',N.t[ct]||'');if(v===null)return;if(v.trim())N.t[ct]=v.trim();else delete N.t[ct];sv();fillTeams();draw()};
-$('pq').onchange=function(){var v=+this.value;for(var i=0;i<S.rows.length;i++)if(S.rows[i].p===v){ct=S.rows[i].t;$('tm').value=ct;draw();$('err').textContent='';return}$('err').textContent='Jogador '+v+' não encontrado.'};
+function goP(p){for(var i=0;i<S.rows.length;i++)if(S.rows[i].p===p){ct=S.rows[i].t;$('tm').value=ct;$('pr').innerHTML='';draw();$('err').textContent='';return true}return false}
+$('pq').onchange=function(){
+  var q=this.value.trim();if(!q||!S)return;$('pr').innerHTML='';
+  if(/^\d+$/.test(q)){if(!goP(+q))$('err').textContent='Jogador '+q+' não encontrado no save.';return}
+  var inSave={};S.rows.forEach(function(r){inSave[r.p]=1});
+  var ql=q.toLowerCase(),res=[];
+  for(var id in inSave){var nm=pn(id);if(nm.toLowerCase().indexOf(ql)>=0){res.push(id);if(res.length>=12)break}}
+  if(!res.length){$('err').textContent='Nenhum jogador do save com "'+q+'".'+(Object.keys(DB.p).length?'':' Carregue o fifa.db.');return}
+  $('err').textContent='';
+  $('pr').innerHTML=res.map(function(id){return'<button class="btn sec" data-g="'+id+'">'+esc(pn(id))+' · ID '+id+'</button>'}).join('');
+  [].forEach.call($('pr').querySelectorAll('button'),function(el){el.onclick=function(){goP(+this.dataset.g)}});
+};
 $('imp').onclick=function(){
   var c=0;$('ta').value.split(/\r?\n/).forEach(function(l){
     var a=l.split(/[,;\t]/);if(a.length<2)return;var k='p';
@@ -142,6 +212,7 @@ $('imp').onclick=function(){
     var id=a.shift().trim(),nm=a.join(',').trim();
     if(/^\d+$/.test(id)&&nm){N[k][id]=nm;c++}
   });sv();$('ta').value='';if(S){fillTeams();draw()}alert(c+' nomes importados.')};
+dbInfo();
 $('exp').onclick=function(){
   var o=[];for(var p in N.p)o.push('p,'+p+','+N.p[p]);for(var t in N.t)o.push('t,'+t+','+N.t[t]);
   $('ta').value=o.join('\n');$('ta').select();try{document.execCommand('copy')}catch(e){}};
