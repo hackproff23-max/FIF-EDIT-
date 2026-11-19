@@ -129,7 +129,7 @@ function parse(b){
       var sz=dv.getUint32(p+8,true),c=dv.getUint32(p+12,true);
       if(c>1000&&sz===c*16+8){
         var rows=[],teams={};
-        for(var i=0;i<c;i++){var o=p+20+16*i,t=dv.getUint32(o,true);rows.push({o:o,t:t,p:dv.getUint32(o+4,true),n:b[o+8]>>1});(teams[t]=teams[t]||[]).push(i)}
+        for(var i=0;i<c;i++){var o=p+20+16*i,t=dv.getUint32(o,true);rows.push({o:o,t:t,p:dv.getUint32(o+4,true),n:(b[o+8]&1)?(b[o+8]>>1)+1:0});(teams[t]=teams[t]||[]).push(i)}
         return{u8:b,rows:rows,teams:teams};
       }
     }
@@ -233,7 +233,7 @@ function zip(name,data){
 }
 $('dl').onclick=async function(){
   var out=new Uint8Array(S.u8);
-  for(var i=0;i<cur.length;i++)if(cur[i]!==orig[i]){var o=S.rows[i].o+8;out[o]=(out[o]&1)|(cur[i]<<1)}
+  for(var i=0;i<cur.length;i++)if(cur[i]!==orig[i]){var o=S.rows[i].o+8;out[o]=cur[i]>0?(((cur[i]-1)<<1)|1):0}
   try{
     if(window.claude&&window.claude.use){
       var d=await window.claude.use('downloads');

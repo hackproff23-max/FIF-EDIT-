@@ -1,7 +1,7 @@
 # FIF-EDIT · Editor de camisas do FIFA 14
 
 App de página única (HTML) para mudar o **número da camisa** dos jogadores no save da carreira
-(`SAVECAREER...`) do FIFA 14 Android (`com.ea.game.fifa14_row`). Nada além do número é alterado.
+(`SAVECAREER...`) do FIFA 14 Android (`com.ea.game.fifa14_row`). Nada além do número é alterado. (O save guarda o número menos 1; o app já corrige isso.)
 
 ## Usar
 1. Faça **backup** da pasta `Android/data/com.ea.game.fifa14_row/files`.
