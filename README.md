@@ -21,9 +21,14 @@ gitpush "minha mensagem"   # envia tudo para o GitHub
 Sem instalar: `sh gitpush.sh "mensagem"`. Requer `git` e login no GitHub (token) no primeiro push.
 
 ## Aviso
-Projeto não oficial, sem relação com a EA. Use em saves seus e mantenha backup. O arquivo termina com 4 bytes (possível checksum) ainda não identificados; se o jogo recusar o save editado, restaure o backup.
+Projeto não oficial, sem relação com a EA. Use em saves seus e mantenha backup. Os últimos 4 bytes do save são um CRC-32 (variante BZIP2, little-endian) que o app recalcula ao baixar. Sem isso o jogo recusa o save ("Sem jogos salvos"). Mantenha sempre o backup.
 
 ## Publicar online (Actions)
 O workflow `.github/workflows/pages.yml` publica o app a cada push. Ative uma vez em
 *Settings → Pages → Source: GitHub Actions*. O link aparece em *Actions* após o primeiro push.
 O token do `gitpush` precisa das permissões `repo` e `workflow`.
+
+## APK (Android)
+O workflow `.github/workflows/apk.yml` empacota o `index.html` com Capacitor e gera o APK a cada push.
+Baixe em *Releases → FIF-EDIT (APK mais recente)* ou em *Actions → Build APK → Artifacts*.
+No app, **Baixar save editado** abre o menu de compartilhar: escolha *Salvar em arquivos* e depois copie o arquivo para a pasta do jogo (mesmo nome).
