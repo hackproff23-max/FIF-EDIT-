@@ -146,7 +146,7 @@ function readF(inp,cb){var f=inp.files[0];if(!f)return;var r=new FileReader();r.
 
 if(window.Capacitor&&Capacitor.isNativePlatform&&Capacitor.isNativePlatform()&&!window.Native)$('fl').hidden=false;
 $('fl').onclick=function(){
-  Capacitor.registerPlugin('Float').start().then(function(r){
+  plug('Float').start().then(function(r){
     alert(r&&r.needsPermission?'Ative "Sobrepor a outros apps" para o FIF-EDIT na tela que abriu, volte e toque de novo.':'Pronto! Abra o jogo e toque na bolinha ⚽ para usar o editor por cima dele.')
   }).catch(function(e){alert('Não consegui abrir a janela flutuante.')})};
 $('pickdb').onclick=function(){$('fd').click()};
@@ -285,6 +285,14 @@ function zip(name,data){
   return o;
 }
 function toB64(d){var bs='';for(var q=0;q<d.length;q+=0x8000)bs+=String.fromCharCode.apply(null,d.subarray(q,q+0x8000));return btoa(bs)}
+function plug(n){
+  var C=window.Capacitor;
+  if(C&&typeof C.registerPlugin==='function'){try{return C.registerPlugin(n)}catch(e){}}
+  if(C&&C.Plugins&&C.Plugins[n])return C.Plugins[n];
+  return new Proxy({},{get:function(_,m){return function(o){
+    if(C&&typeof C.nativePromise==='function')return C.nativePromise(n,m,o||{});
+    return Promise.reject(new Error('Plugin '+n+' indisponível'))}}})
+}
 var CH=3*256*1024;
 async function saveOut(name,data){
   try{
@@ -292,7 +300,7 @@ async function saveOut(name,data){
       for(var o=0;o<data.length;o+=CH)window.Native.chunk(name,toB64(data.subarray(o,o+CH)),o===0);
       window.Native.finish(name);return}
     if(window.Capacitor&&Capacitor.isNativePlatform&&Capacitor.isNativePlatform()){
-      var FS=Capacitor.registerPlugin('Filesystem'),SH=Capacitor.registerPlugin('Share');
+      var FS=plug('Filesystem'),SH=plug('Share');
       for(var o=0;o<data.length;o+=CH){var part=toB64(data.subarray(o,o+CH));
         if(o===0)await FS.writeFile({path:name,data:part,directory:'CACHE'});
         else await FS.appendFile({path:name,data:part,directory:'CACHE'})}
