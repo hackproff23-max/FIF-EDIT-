@@ -1,0 +1,28 @@
+# FIF-EDIT · Editor de camisas do FIFA 14
+
+App de página única (HTML) para mudar o **número da camisa** dos jogadores no save da carreira
+(`SAVECAREER...`) do FIFA 14 Android (`com.ea.game.fifa14_row`). Nada além do número é alterado.
+
+## Usar
+1. Faça **backup** da pasta `Android/data/com.ea.game.fifa14_row/files`.
+2. Abra `index.html` no navegador (ou pelo GitHub Pages: *Settings → Pages → branch `main`*).
+3. Escolha o arquivo `SAVECAREER...`.
+4. Escolha o time. Para achar o jogador recém-contratado, use **"Descobrir o jogador que acabei de contratar"** com um save antigo: quem é novo no time aparece com a etiqueta NOVO.
+5. Mude o número, toque em **Baixar save editado** e coloque o arquivo de volta na pasta do jogo (mesmo nome).
+
+O save guarda só IDs. Toque no nome de um jogador para nomeá-lo (fica salvo no navegador), ou importe uma lista `p,ID,Nome` / `t,ID,Nome`.
+
+## Comando `gitpush`
+```sh
+sh install-gitpush.sh      # uma vez
+gitpush "minha mensagem"   # envia tudo para o GitHub
+```
+Sem instalar: `sh gitpush.sh "mensagem"`. Requer `git` e login no GitHub (token) no primeiro push.
+
+## Aviso
+Projeto não oficial, sem relação com a EA. Use em saves seus e mantenha backup. O arquivo termina com 4 bytes (possível checksum) ainda não identificados; se o jogo recusar o save editado, restaure o backup.
+
+## Publicar online (Actions)
+O workflow `.github/workflows/pages.yml` publica o app a cada push. Ative uma vez em
+*Settings → Pages → Source: GitHub Actions*. O link aparece em *Actions* após o primeiro push.
+O token do `gitpush` precisa das permissões `repo` e `workflow`.

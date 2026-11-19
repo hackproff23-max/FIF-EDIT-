@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>FIF-EDIT · Camisas FIFA 14</title>
+<style>
+:root{--bg:#f4f6f8;--card:#fff;--tx:#111827;--mu:#6b7280;--ac:#0a7d3b;--ac2:#fff;--bd:#d9dee5;--er:#c62828;--ch:#fff4cc;--nw:#e3f2ff;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1418;--card:#1a2128;--tx:#eef2f6;--mu:#9aa6b2;--ac:#2fbf6b;--ac2:#06210f;--bd:#2c3640;--er:#ff7b72;--ch:#3a3510;--nw:#12304a;color-scheme:dark}}
+*{box-sizing:border-box}html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:14px 14px 100px}
+h1{font-size:20px;margin:4px 0 2px}h2{font-size:15px;margin:0 0 6px}
+.s,.note{color:var(--mu);font-size:13px}.s{font-size:14px;margin:0 0 12px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px;margin-bottom:12px}
+button,select,input{font:inherit;color:var(--tx)}
+.btn{display:block;width:100%;background:var(--ac);color:var(--ac2);border:0;border-radius:10px;padding:12px;font-weight:600;margin-top:8px}
+.btn.sec{background:var(--bg);color:var(--tx);border:1px solid var(--bd)}.btn[disabled]{opacity:.45}
+select,.in{width:100%;background:var(--bg);border:1px solid var(--bd);border-radius:8px;padding:10px}
+label{display:block;font-size:13px;color:var(--mu);margin:8px 0 4px}
+.row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 12px;margin:0 -12px;border-top:1px solid var(--bd)}
+.row:first-child{border-top:0}.row.ch{background:var(--ch)}.row.nw{background:var(--nw)}
+.pid{font-size:15px;min-width:0}.pid b{display:block;overflow:hidden;text-overflow:ellipsis;cursor:pointer}.pid small{color:var(--mu)}
+.tag{background:var(--ac);color:var(--ac2);border-radius:6px;padding:1px 6px;font-size:11px;margin-left:6px;font-weight:700}
+.num{width:78px;flex:none;text-align:center;font-size:20px;font-weight:700;background:var(--bg);border:1px solid var(--bd);border-radius:8px;padding:8px}
+.num.dup{border-color:var(--er);color:var(--er)}.warn{color:var(--er);font-size:13px;margin-top:6px}
+.bar{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--bd);padding:10px 14px calc(10px + env(safe-area-inset-bottom,0px))}
+.bar span{display:block;font-size:13px;color:var(--mu)}.bar .btn{margin-top:6px}
+textarea.in{min-height:70px;font-size:13px}
+details summary{cursor:pointer;font-weight:600}
+</style>
+</head>
+<body>
+<h1>⚽ FIF-EDIT · Camisas FIFA 14</h1>
+<p class="s">Edita só o número da camisa do save da carreira. Funciona offline no navegador.</p>
+
+<div class="card">
+  <h2>1. Save da carreira</h2>
+  <div class="note">Faça backup da pasta do jogo. Escolha o arquivo <b>SAVECAREER…</b></div>
+  <input id="f" type="file" hidden><button class="btn" id="pick">Escolher SAVECAREER</button>
+  <div class="warn" id="err"></div>
+</div>
+
+<div id="ed" hidden>
+  <div class="card">
+    <h2>2. Achar o time e o jogador</h2>
+    <label for="tm">Time</label><select id="tm"></select>
+    <button class="btn sec" id="rt">Dar nome a este time</button>
+    <label for="pq">Ir ao time de um jogador (ID)</label>
+    <input class="in" id="pq" type="number" inputmode="numeric" placeholder="ex.: 207865">
+    <details style="margin-top:10px"><summary>Descobrir o jogador que acabei de contratar</summary>
+      <div class="note" style="margin:6px 0">Escolha um save <b>antigo</b> (de antes da contratação). Quem não estava nesse time aparece como <span class="tag" style="margin:0">NOVO</span> no topo da lista.</div>
+      <input id="f2" type="file" hidden><button class="btn sec" id="pick2">Escolher save antigo</button>
+      <div class="note" id="cmp"></div>
+    </details>
+    <details style="margin-top:10px"><summary>Nomes de jogadores e times</summary>
+      <div class="note" style="margin:6px 0">O save só tem IDs. Toque no nome de um jogador para nomeá-lo. Ou importe uma lista, uma por linha: <code>p,ID,Nome</code> (jogador) ou <code>t,ID,Nome</code> (time).</div>
+      <textarea class="in" id="ta" placeholder="p,207865,Fulano&#10;t,73,Meu Time"></textarea>
+      <button class="btn sec" id="imp">Importar lista</button>
+      <button class="btn sec" id="exp">Copiar meus nomes</button>
+    </details>
+  </div>
+  <div class="card" id="list"></div>
+</div>
+
+<div class="bar" id="bar" hidden><span id="cnt"></span><button class="btn" id="dl" disabled>Baixar save editado</button></div>
+
+<script>
+(function(){
+var S=null,OLD=null,cur=[],orig=[],fname='SAVECAREER',ct=null,N={p:{},t:{}};
+var $=function(i){return document.getElementById(i)};
+try{N=JSON.parse(localStorage.getItem('fifnames'))||N}catch(e){}
+function sv(){try{localStorage.setItem('fifnames',JSON.stringify(N))}catch(e){}}
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+function pn(p){return N.p[p]||'Jogador '+p}
+function tn(t){return N.t[t]||'Time '+t}
+
+function parse(b){
+  var dv=new DataView(b.buffer,b.byteOffset,b.byteLength);
+  for(var p=0;p+20<=b.length;p+=4){
+    if(dv.getUint32(p,true)===4&&dv.getUint32(p+4,true)===0x4f){
+      var sz=dv.getUint32(p+8,true),c=dv.getUint32(p+12,true);
+      if(c>1000&&sz===c*16+8){
+        var rows=[],teams={};
+        for(var i=0;i<c;i++){var o=p+20+16*i,t=dv.getUint32(o,true);rows.push({o:o,t:t,p:dv.getUint32(o+4,true),n:b[o+8]>>1});(teams[t]=teams[t]||[]).push(i)}
+        return{u8:b,rows:rows,teams:teams};
+      }
+    }
+  }
+  return null;
+}
+function readF(inp,cb){var f=inp.files[0];if(!f)return;var r=new FileReader();r.onload=function(){cb(new Uint8Array(r.result),f.name)};r.readAsArrayBuffer(f);inp.value=''}
+
+$('pick').onclick=function(){$('f').click()};
+$('f').onchange=function(){readF(this,function(b,n){
+  var s=parse(b);if(!s){$('err').textContent='Não achei a tabela de jogadores. É mesmo o SAVECAREER?';return}
+  $('err').textContent='';S=s;fname=n;OLD=null;$('cmp').textContent='';
+  cur=s.rows.map(function(r){return r.n});orig=cur.slice();
+  ct=S.teams[73]?73:+Object.keys(S.teams)[0];
+  fillTeams();$('ed').hidden=false;$('bar').hidden=false;draw();upd();
+})};
+function fillTeams(){
+  var ids=Object.keys(S.teams).map(Number).sort(function(a,b){return a-b});
+  $('tm').innerHTML=ids.map(function(t){return'<option value="'+t+'">'+esc(tn(t))+' · ID '+t+' ('+S.teams[t].length+')</option>'}).join('');
+  $('tm').value=ct;
+}
+$('pick2').onclick=function(){$('f2').click()};
+$('f2').onchange=function(){readF(this,function(b){
+  var s=parse(b);if(!s){$('cmp').textContent='Esse arquivo não parece um SAVECAREER.';return}
+  OLD={};s.rows.forEach(function(r){OLD[r.p]=r.t});
+  $('cmp').textContent='Comparação ativa. Os novos aparecem no topo.';draw();
+})};
+function isNew(i){return OLD&&OLD[S.rows[i].p]!==S.rows[i].t}
+
+function draw(){
+  var idx=(S.teams[ct]||[]).slice(),cn={};
+  idx.sort(function(a,b){return (isNew(b)-isNew(a))||(cur[a]-cur[b])});
+  idx.forEach(function(i){if(cur[i])cn[cur[i]]=(cn[cur[i]]||0)+1});
+  var h='<h2>'+esc(tn(ct))+'</h2>',d=0;
+  idx.forEach(function(i){
+    var dup=cur[i]&&cn[cur[i]]>1;if(dup)d++;
+    var nw=isNew(i);
+    h+='<div class="row'+(cur[i]!==orig[i]?' ch':(nw?' nw':''))+'"><div class="pid"><b data-p="'+S.rows[i].p+'">'+esc(pn(S.rows[i].p))+(nw?'<span class="tag">NOVO</span>':'')+'</b><small>ID '+S.rows[i].p+' · '+(orig[i]?'camisa '+orig[i]:'sem número')+'</small></div>'+
+       '<input class="num'+(dup?' dup':'')+'" type="number" inputmode="numeric" min="0" max="99" value="'+cur[i]+'" data-i="'+i+'"></div>';
+  });
+  if(d)h+='<div class="warn">Há números repetidos neste time.</div>';
+  $('list').innerHTML=h;
+  [].forEach.call($('list').querySelectorAll('input'),function(el){el.onchange=function(){
+    var v=parseInt(this.value,10);if(isNaN(v)||v<0)v=0;if(v>99)v=99;cur[+this.dataset.i]=v;draw();upd()}});
+  [].forEach.call($('list').querySelectorAll('b[data-p]'),function(el){el.onclick=function(){
+    var p=this.dataset.p,v=prompt('Nome do jogador '+p+':',N.p[p]||'');if(v===null)return;
+    if(v.trim())N.p[p]=v.trim();else delete N.p[p];sv();draw()}});
+}
+function nch(){var c=0;for(var i=0;i<cur.length;i++)if(cur[i]!==orig[i])c++;return c}
+function upd(){var c=nch();$('cnt').textContent=c+(c===1?' alteração':' alterações');$('dl').disabled=!c}
+$('tm').onchange=function(){ct=+this.value;draw()};
+$('rt').onclick=function(){var v=prompt('Nome do time '+ct+':',N.t[ct]||'');if(v===null)return;if(v.trim())N.t[ct]=v.trim();else delete N.t[ct];sv();fillTeams();draw()};
+$('pq').onchange=function(){var v=+this.value;for(var i=0;i<S.rows.length;i++)if(S.rows[i].p===v){ct=S.rows[i].t;$('tm').value=ct;draw();$('err').textContent='';return}$('err').textContent='Jogador '+v+' não encontrado.'};
+$('imp').onclick=function(){
+  var c=0;$('ta').value.split(/\r?\n/).forEach(function(l){
+    var a=l.split(/[,;\t]/);if(a.length<2)return;var k='p';
+    if(/^[pt]$/i.test(a[0].trim())){k=a.shift().trim().toLowerCase()}
+    var id=a.shift().trim(),nm=a.join(',').trim();
+    if(/^\d+$/.test(id)&&nm){N[k][id]=nm;c++}
+  });sv();$('ta').value='';if(S){fillTeams();draw()}alert(c+' nomes importados.')};
+$('exp').onclick=function(){
+  var o=[];for(var p in N.p)o.push('p,'+p+','+N.p[p]);for(var t in N.t)o.push('t,'+t+','+N.t[t]);
+  $('ta').value=o.join('\n');$('ta').select();try{document.execCommand('copy')}catch(e){}};
+
+var T=(function(){var t=[];for(var n=0;n<256;n++){var c=n;for(var k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();
+function crc(b){var c=0xFFFFFFFF;for(var i=0;i<b.length;i++)c=T[(c^b[i])&255]^(c>>>8);return(c^0xFFFFFFFF)>>>0}
+function zip(name,data){
+  var nm=new TextEncoder().encode(name),c=crc(data),n=data.length,dt=((2026-1980)<<9)|(11<<5)|19,L=30+nm.length;
+  var o=new Uint8Array(L+n+46+nm.length+22),v=new DataView(o.buffer),p=0;
+  v.setUint32(p,0x04034b50,true);v.setUint16(p+4,20,true);v.setUint16(p+6,0x0800,true);v.setUint16(p+12,dt,true);
+  v.setUint32(p+14,c,true);v.setUint32(p+18,n,true);v.setUint32(p+22,n,true);v.setUint16(p+26,nm.length,true);
+  o.set(nm,30);o.set(data,L);p=L+n;
+  v.setUint32(p,0x02014b50,true);v.setUint16(p+4,20,true);v.setUint16(p+6,20,true);v.setUint16(p+8,0x0800,true);v.setUint16(p+14,dt,true);
+  v.setUint32(p+16,c,true);v.setUint32(p+20,n,true);v.setUint32(p+24,n,true);v.setUint16(p+28,nm.length,true);
+  o.set(nm,p+46);var e=p+46+nm.length;
+  v.setUint32(e,0x06054b50,true);v.setUint16(e+8,1,true);v.setUint16(e+10,1,true);v.setUint32(e+12,46+nm.length,true);v.setUint32(e+16,L+n,true);
+  return o;
+}
+$('dl').onclick=async function(){
+  var out=new Uint8Array(S.u8);
+  for(var i=0;i<cur.length;i++)if(cur[i]!==orig[i]){var o=S.rows[i].o+8;out[o]=(out[o]&1)|(cur[i]<<1)}
+  try{
+    if(window.claude&&window.claude.use){
+      var d=await window.claude.use('downloads');
+      if(d){await d.save({filename:'fifa14_save_editado.zip',data:zip(fname,out)});return}
+    }
+    var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([out]));a.download=fname;
+    document.body.appendChild(a);a.click();a.remove();
+  }catch(e){if(!e||e.code!=='declined')$('err').textContent='Não foi possível baixar.'}
+};
+})();
+</script>
+</body>
+</html>
