@@ -62,7 +62,7 @@ details summary{cursor:pointer;font-weight:600}
       <div class="note" id="cmp"></div>
     </details>
     <details style="margin-top:10px"><summary>Nomes de jogadores e times</summary>
-      <div class="note" style="margin:6px 0">Com o fifa.db carregado os nomes vêm sozinhos. Para corrigir um nome, toque nele. Ou importe uma lista, uma por linha: <code>p,ID,Nome</code> (jogador) ou <code>t,ID,Nome</code> (time).</div>
+      <div class="note" style="margin:6px 0">Com o fifa.db carregado os nomes vêm sozinhos. Toque no nome de um jogador para editar primeiro nome, sobrenome e nome comum de verdade no fifa.db (depois use <b>Baixar fifa.db</b>; faça backup do original). Sem o fifa.db, o nome muda só aqui no app. Ou importe uma lista, uma por linha: <code>p,ID,Nome</code> (jogador) ou <code>t,ID,Nome</code> (time).</div>
       <textarea class="in" id="ta" placeholder="p,207865,Fulano&#10;t,73,Meu Time"></textarea>
       <button class="btn sec" id="imp">Importar lista</button>
       <button class="btn sec" id="exp">Copiar meus nomes</button>
@@ -71,7 +71,7 @@ details summary{cursor:pointer;font-weight:600}
   <div class="card" id="list"></div>
 </div>
 
-<div class="bar" id="bar" hidden><span id="cnt"></span><button class="btn" id="dl" disabled>Baixar save editado</button></div>
+<div class="bar" id="bar" hidden><span id="cnt"></span><button class="btn sec" id="dldb" hidden>Baixar fifa.db</button><button class="btn" id="dl" disabled>Baixar save editado</button></div>
 
 <script>
 (function(){
@@ -80,7 +80,7 @@ var $=function(i){return document.getElementById(i)};
 try{N=JSON.parse(localStorage.getItem('fifnames'))||N}catch(e){}
 function sv(){try{localStorage.setItem('fifnames',JSON.stringify(N))}catch(e){}}
 function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
-var DB={p:{},t:{}};
+var DB={p:{},t:{}},DBX=null;
 try{DB=JSON.parse(localStorage.getItem('fifdb'))||DB}catch(e){}
 function pn(p){return N.p[p]||DB.p[p]||'Jogador '+p}
 function tn(t){return N.t[t]||DB.t[t]||'Time '+t}
@@ -94,7 +94,7 @@ function parseDb(b){
   if(L<400)return null;
   var nt=dv.getUint32(8,true);if(nt<5||nt>2000||12+4*nt>L)return null;
   var offs=[];for(var i=0;i<nt;i++)offs.push(dv.getUint32(12+4*i,true));
-  var P=null,T=null;
+  var P=null,T=null,PM={},CNT={};
   for(var i=0;i<nt;i++){
     var o=offs[i],nx=i+1<nt?offs[i+1]:L;if(o+8>L||nx<=o)continue;
     var c=dv.getUint32(o,true),sz=nx-o;
@@ -105,6 +105,8 @@ function parseDb(b){
         if(a!==null&&z!==null&&m!==null&&(a||z||m))ok++}
       if(ok>=ch*0.95){P={};
         for(var k=0;k<c;k++){var r=o+8+72*k,id=dv.getUint32(r,true);
+          var pf=dv.getUint32(r+4,true),pl=dv.getUint32(r+8,true),pm=dv.getUint32(r+12,true);
+          PM[id]={f:pf,l:pl,m:pm};[pf,pl,pm].forEach(function(x){if(x)CNT[x]=(CNT[x]||0)+1});
           var f=rs(b,dv,dv.getUint32(r+4,true))||'',l=rs(b,dv,dv.getUint32(r+8,true))||'',m=rs(b,dv,dv.getUint32(r+12,true))||'';
           var full=(f+' '+l).trim(),nm=full||m;
           if(m&&full&&full.indexOf(m)<0)nm+=' ('+m+')';
@@ -117,7 +119,7 @@ function parseDb(b){
         for(var k=0;k<c;k++){var r=o+8+44*k,a=rs(b,dv,dv.getUint32(r+4,true));if(a)T[dv.getUint32(r,true)]=a}}
     }
   }
-  return(P&&T)?{p:P,t:T}:null;
+  return(P&&T)?{p:P,t:T,pm:PM,cnt:CNT}:null;
 }
 function dbInfo(){var np=Object.keys(DB.p).length,nt=Object.keys(DB.t).length;
   $('dbs').textContent=np?('fifa.db carregado: '+np+' jogadores e '+nt+' times.'):''}
@@ -139,10 +141,10 @@ function parse(b){
 function readF(inp,cb){var f=inp.files[0];if(!f)return;var r=new FileReader();r.onload=function(){cb(new Uint8Array(r.result),f.name)};r.readAsArrayBuffer(f);inp.value=''}
 
 $('pickdb').onclick=function(){$('fd').click()};
-$('fd').onchange=function(){readF(this,function(b){
+$('fd').onchange=function(){readF(this,function(b,dn){
   var r=null;try{r=parseDb(b)}catch(e){}
   if(!r){$('dbe').textContent='Não consegui ler esse arquivo como fifa.db (tabelas de jogadores/times não encontradas).';return}
-  $('dbe').textContent='';DB=r;
+  $('dbe').textContent='';DB={p:r.p,t:r.t};DBX={raw:b,pm:r.pm,cnt:r.cnt,name:dn||'fifa.db',dirty:false};$('dldb').hidden=true;
   try{localStorage.setItem('fifdb',JSON.stringify(DB))}catch(e){$('dbe').textContent='Nomes carregados, mas o navegador não deixou salvar; recarregue o fifa.db na próxima vez.'}
   dbInfo();if(S){fillTeams();draw()}
 })};
@@ -189,9 +191,32 @@ function draw(){
       var v=parseInt(this.value,10);
       if(isNaN(v)||v<1||v>99){this.value=cur[+this.dataset.i]||'';return}
       cur[+this.dataset.i]=v;draw();upd()}});
-  [].forEach.call($('list').querySelectorAll('b[data-p]'),function(el){el.onclick=function(){
-    var p=this.dataset.p,v=prompt('Nome do jogador '+p+':',N.p[p]||'');if(v===null)return;
-    if(v.trim())N.p[p]=v.trim();else delete N.p[p];sv();draw()}});
+  [].forEach.call($('list').querySelectorAll('b[data-p]'),function(el){el.onclick=function(){editName(this.dataset.p)}});
+}
+function rawStr(id,key){var m=DBX.pm[id];if(!m||!m[key])return null;var b=DBX.raw,ptr=m[key],dv=new DataView(b.buffer,b.byteOffset,b.byteLength);
+  var cap=dv.getUint16(ptr,true),t=ptr+2,e=t;while(e<t+cap&&b[e])e++;return{ptr:ptr,cap:cap,txt:new TextDecoder().decode(b.subarray(t,e))}}
+function editName(id){
+  if(!DBX||!DBX.pm[id]){
+    var v=prompt('Nome do jogador '+id+' (só aparece neste app; carregue o fifa.db para editar de verdade):',N.p[id]||'');if(v===null)return;
+    if(v.trim())N.p[id]=v.trim();else delete N.p[id];sv();draw();return}
+  var F=[['f','Primeiro nome'],['l','Sobrenome'],['m','Nome comum / camisa']],ch=[];
+  for(var i=0;i<F.length;i++){
+    var f=rawStr(id,F[i][0]);if(!f)continue;
+    var max=f.cap-1,v=prompt(F[i][1]+' (máx. '+max+' bytes; vazio = manter):',f.txt);
+    if(v===null)return;v=v.trim();if(!v||v===f.txt)continue;
+    var by=new TextEncoder().encode(v);
+    if(by.length>max){alert('"'+v+'" tem '+by.length+' bytes e o limite é '+max+'. Nada foi alterado.');return}
+    var n=DBX.cnt[f.ptr]||1;
+    if(n>1&&!confirm('Esse texto é usado por '+n+' jogadores. Mudar vai alterar todos eles. Continuar?'))return;
+    ch.push([f,by]);
+  }
+  if(!ch.length)return;
+  ch.forEach(function(c){var f=c[0],by=c[1],b=DBX.raw;for(var k=0;k<f.cap;k++)b[f.ptr+2+k]=k<by.length?by[k]:0});
+  var a=(rawStr(id,'f')||{txt:''}).txt,l=(rawStr(id,'l')||{txt:''}).txt,m=(rawStr(id,'m')||{txt:''}).txt;
+  var full=(a+' '+l).trim(),nm=full||m;if(m&&full&&full.indexOf(m)<0)nm+=' ('+m+')';
+  if(nm)DB.p[id]=nm;delete N.p[id];sv();
+  try{localStorage.setItem('fifdb',JSON.stringify(DB))}catch(e){}
+  DBX.dirty=true;$('dldb').hidden=false;$('err').textContent='Nome alterado. Toque em "Baixar fifa.db" para salvar.';draw();
 }
 function nch(){var c=0;for(var i=0;i<cur.length;i++)if(cur[i]!==orig[i])c++;return c}
 function upd(){var c=nch();$('cnt').textContent=c+(c===1?' alteração':' alterações');$('dl').disabled=!c}
@@ -238,25 +263,29 @@ function zip(name,data){
   v.setUint32(e,0x06054b50,true);v.setUint16(e+8,1,true);v.setUint16(e+10,1,true);v.setUint32(e+12,46+nm.length,true);v.setUint32(e+16,L+n,true);
   return o;
 }
+async function saveOut(name,data){
+  try{
+    if(window.Capacitor&&Capacitor.isNativePlatform&&Capacitor.isNativePlatform()){
+      var bs='';for(var q=0;q<data.length;q+=0x8000)bs+=String.fromCharCode.apply(null,data.subarray(q,q+0x8000));
+      var FS=Capacitor.registerPlugin('Filesystem'),SH=Capacitor.registerPlugin('Share');
+      var w=await FS.writeFile({path:name,data:btoa(bs),directory:'CACHE'});
+      await SH.share({title:name,files:[w.uri],dialogTitle:'Salvar save editado'});return;
+    }
+    if(window.claude&&window.claude.use){
+      var d=await window.claude.use('downloads');
+      if(d){await d.save({filename:'editado_'+name+'.zip',data:zip(name,data)});return}
+    }
+    var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([data]));a.download=name;
+    document.body.appendChild(a);a.click();a.remove();
+  }catch(e){if(!e||e.code!=='declined')$('err').textContent='Não foi possível baixar.'}
+}
 $('dl').onclick=async function(){
   var out=new Uint8Array(S.u8);
   for(var i=0;i<cur.length;i++)if(cur[i]!==orig[i]){if(!(cur[i]>=1&&cur[i]<=99)){$('err').textContent='Número inválido: use de 1 a 99.';return}var o=S.rows[i].o+8;out[o]=((cur[i]-1)<<1)|1}
   stampCrc(out);
-  try{
-    if(window.Capacitor&&Capacitor.isNativePlatform&&Capacitor.isNativePlatform()){
-      var bs='';for(var q=0;q<out.length;q+=0x8000)bs+=String.fromCharCode.apply(null,out.subarray(q,q+0x8000));
-      var FS=Capacitor.registerPlugin('Filesystem'),SH=Capacitor.registerPlugin('Share');
-      var w=await FS.writeFile({path:fname,data:btoa(bs),directory:'CACHE'});
-      await SH.share({title:fname,files:[w.uri],dialogTitle:'Salvar save editado'});return;
-    }
-    if(window.claude&&window.claude.use){
-      var d=await window.claude.use('downloads');
-      if(d){await d.save({filename:'fifa14_save_editado.zip',data:zip(fname,out)});return}
-    }
-    var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([out]));a.download=fname;
-    document.body.appendChild(a);a.click();a.remove();
-  }catch(e){if(!e||e.code!=='declined')$('err').textContent='Não foi possível baixar.'}
+  await saveOut(fname,out);
 };
+$('dldb').onclick=function(){if(DBX)saveOut(DBX.name,DBX.raw)};
 })();
 </script>
 </body>
