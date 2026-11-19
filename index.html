@@ -313,7 +313,7 @@ async function dwrite(slot,data){
     r=dio().wchunk(slot,toB64(data.subarray(o,o+C)),o===0);
     if(r)throw new Error(r.replace(/^ERR:/,''))}
   r=dio().commit(slot);if(r)throw new Error(r.replace(/^ERR:/,''))}
-function lab(){var d=dio();
+function lab(){var d=dio();$('fl').hidden=!(d&&!window.Native);
   $('dl').textContent=(d&&d.has('save'))?'Salvar por cima do save':'Baixar save editado';
   $('dldb').textContent=(d&&d.has('db'))?'Salvar por cima do fifa.db':'Baixar fifa.db'}
 async function directLoad(slot){
@@ -328,6 +328,18 @@ async function directLoad(slot){
   }catch(e){var m='Erro ao abrir: '+((e&&e.message)||e);(isDb?$('dbe'):$('err')).textContent=m;alert(m)}
 }
 lab();setTimeout(lab,600);
+var floatWait=false;
+function floatTry(){
+  var d=dio();if(!d)return;
+  var r=d.startFloat();
+  if(r==='perm'){floatWait=true;return}
+  floatWait=false;
+  if(r==='ok')alert('Pronto! Abra o jogo e toque na bolinha ⚽ para usar o editor por cima dele.');
+  else alert('Não consegui abrir a janela flutuante: '+r)}
+$('fl').onclick=floatTry;
+function floatResume(){if(floatWait&&dio()&&dio().canFloat())floatTry()}
+document.addEventListener('visibilitychange',function(){if(!document.hidden)floatResume()});
+window.addEventListener('focus',floatResume);
 var CH=3*256*1024;
 async function saveOut(name,data,slot){
   try{

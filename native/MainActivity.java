@@ -13,5 +13,13 @@ public class MainActivity extends BridgeActivity {
             w.addJavascriptInterface(new DirectIO(this, w), "DirectIO");
         } catch (Exception e) {
         }
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= 33
+                    && checkSelfPermission("android.permission.POST_NOTIFICATIONS")
+                    != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"}, 77);
+            }
+        } catch (Exception e) {
+        }
     }
 }

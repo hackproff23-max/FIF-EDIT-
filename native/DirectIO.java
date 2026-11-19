@@ -4,7 +4,12 @@ import android.content.Context;
 import android.content.Intent;
 import android.database.Cursor;
 import android.net.Uri;
+import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.ParcelFileDescriptor;
+import android.provider.Settings;
+import android.widget.Toast;
 import android.provider.OpenableColumns;
 import android.util.Base64;
 import android.webkit.JavascriptInterface;
@@ -166,6 +171,33 @@ public class DirectIO {
             o.close();
             t.delete();
             return "";
+        } catch (Exception e) {
+            return "ERR:" + e.getMessage();
+        }
+    }
+
+    @JavascriptInterface
+    public boolean canFloat() {
+        return Build.VERSION.SDK_INT < 23 || Settings.canDrawOverlays(ctx);
+    }
+
+    @JavascriptInterface
+    public String startFloat() {
+        try {
+            if (!canFloat()) {
+                Intent i = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + ctx.getPackageName()));
+                i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                ctx.startActivity(i);
+                new Handler(Looper.getMainLooper()).post(new Runnable() {
+                    @Override public void run() {
+                        Toast.makeText(ctx, "Ative \"Sobrepor a outros apps\" para o FIF-EDIT e volte", Toast.LENGTH_LONG).show();
+                    }
+                });
+                return "perm";
+            }
+            Intent s = new Intent(ctx, FloatService.class);
+            if (Build.VERSION.SDK_INT >= 26) ctx.startForegroundService(s); else ctx.startService(s);
+            return "ok";
         } catch (Exception e) {
             return "ERR:" + e.getMessage();
         }
