@@ -82,6 +82,9 @@ try{N=JSON.parse(localStorage.getItem('fifnames'))||N}catch(e){}
 function sv(){try{localStorage.setItem('fifnames',JSON.stringify(N))}catch(e){}}
 function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
 var DB={p:{},t:{}},DBX=null;
+function idb(){return new Promise(function(res,rej){var q=indexedDB.open('fifedit',1);q.onupgradeneeded=function(){q.result.createObjectStore('f')};q.onsuccess=function(){res(q.result)};q.onerror=function(){rej(q.error)}})}
+function idbPut(k,v){return idb().then(function(d){return new Promise(function(res,rej){var t=d.transaction('f','readwrite');t.objectStore('f').put(v,k);t.oncomplete=res;t.onerror=function(){rej(t.error)}})})}
+function idbGet(k){return idb().then(function(d){return new Promise(function(res,rej){var q=d.transaction('f').objectStore('f').get(k);q.onsuccess=function(){res(q.result)};q.onerror=function(){rej(q.error)}})})}
 try{DB=JSON.parse(localStorage.getItem('fifdb'))||DB}catch(e){}
 function pn(p){return N.p[p]||DB.p[p]||'Jogador '+p}
 function tn(t){return N.t[t]||DB.t[t]||'Time '+t}
@@ -151,7 +154,7 @@ $('fd').onchange=function(){readF(this,function(b,dn){
   var r=null;try{r=parseDb(b)}catch(e){}
   if(!r){$('dbe').textContent='Não consegui ler esse arquivo como fifa.db (tabelas de jogadores/times não encontradas).';return}
   $('dbe').textContent='';DB={p:r.p,t:r.t};DBX={raw:b,pm:r.pm,cnt:r.cnt,name:dn||'fifa.db',dirty:false};$('dldb').hidden=true;
-  try{localStorage.setItem('fifdb',JSON.stringify(DB))}catch(e){$('dbe').textContent='Nomes carregados, mas o navegador não deixou salvar; recarregue o fifa.db na próxima vez.'}
+  idbPut('db',{name:DBX.name,raw:b}).catch(function(){$('dbe').textContent='fifa.db carregado, mas não consegui guardar offline; recarregue na próxima vez.'});
   dbInfo();if(S){fillTeams();draw()}
 })};
 $('pick').onclick=function(){$('f').click()};
@@ -230,7 +233,7 @@ function editName(id){
   var a=(rawStr(id,'f')||{txt:''}).txt,l=(rawStr(id,'l')||{txt:''}).txt,m=(rawStr(id,'m')||{txt:''}).txt;
   var full=(a+' '+l).trim(),nm=full||m;if(m&&full&&full.indexOf(m)<0)nm+=' ('+m+')';
   if(nm)DB.p[id]=nm;delete N.p[id];sv();
-  try{localStorage.setItem('fifdb',JSON.stringify(DB))}catch(e){}
+  idbPut('db',{name:DBX.name,raw:DBX.raw}).catch(function(){});
   DBX.dirty=true;$('dldb').hidden=false;$('err').textContent='Nome alterado. Toque em "Baixar fifa.db" para salvar.';draw();
 }
 function nch(){var c=0;for(var i=0;i<cur.length;i++)if(cur[i]!==orig[i])c++;return c}
@@ -257,6 +260,9 @@ $('imp').onclick=function(){
     if(/^\d+$/.test(id)&&nm){N[k][id]=nm;c++}
   });sv();$('ta').value='';if(S){fillTeams();draw()}alert(c+' nomes importados.')};
 dbInfo();
+idbGet('db').then(function(x){if(!x||!x.raw)return;var r=null;try{r=parseDb(x.raw)}catch(e){}
+  if(!r)return;DB={p:r.p,t:r.t};DBX={raw:x.raw,pm:r.pm,cnt:r.cnt,name:x.name||'fifa.db',dirty:false};
+  dbInfo();$('dbs').textContent+=' (guardado offline neste app)';if(S){fillTeams();draw()}}).catch(function(){});
 $('exp').onclick=function(){
   var o=[];for(var p in N.p)o.push('p,'+p+','+N.p[p]);for(var t in N.t)o.push('t,'+t+','+N.t[t]);
   $('ta').value=o.join('\n');$('ta').select();try{document.execCommand('copy')}catch(e){}};
@@ -279,13 +285,19 @@ function zip(name,data){
   return o;
 }
 function toB64(d){var bs='';for(var q=0;q<d.length;q+=0x8000)bs+=String.fromCharCode.apply(null,d.subarray(q,q+0x8000));return btoa(bs)}
+var CH=3*256*1024;
 async function saveOut(name,data){
   try{
-    if(window.Native&&window.Native.save){window.Native.save(name,toB64(data));return}
+    if(window.Native&&window.Native.chunk){
+      for(var o=0;o<data.length;o+=CH)window.Native.chunk(name,toB64(data.subarray(o,o+CH)),o===0);
+      window.Native.finish(name);return}
     if(window.Capacitor&&Capacitor.isNativePlatform&&Capacitor.isNativePlatform()){
       var FS=Capacitor.registerPlugin('Filesystem'),SH=Capacitor.registerPlugin('Share');
-      var w=await FS.writeFile({path:name,data:toB64(data),directory:'CACHE'});
-      await SH.share({title:name,files:[w.uri],dialogTitle:'Salvar save editado'});return;
+      for(var o=0;o<data.length;o+=CH){var part=toB64(data.subarray(o,o+CH));
+        if(o===0)await FS.writeFile({path:name,data:part,directory:'CACHE'});
+        else await FS.appendFile({path:name,data:part,directory:'CACHE'})}
+      var u=await FS.getUri({path:name,directory:'CACHE'});
+      await SH.share({title:name,files:[u.uri],dialogTitle:'Salvar '+name});return;
     }
     if(window.claude&&window.claude.use){
       var d=await window.claude.use('downloads');
@@ -293,7 +305,7 @@ async function saveOut(name,data){
     }
     var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([data]));a.download=name;
     document.body.appendChild(a);a.click();a.remove();
-  }catch(e){if(!e||e.code!=='declined')$('err').textContent='Não foi possível baixar.'}
+  }catch(e){if(!e||e.code!=='declined'){var m='Erro ao baixar: '+((e&&e.message)||e);$('err').textContent=m;alert(m)}}
 }
 $('dl').onclick=async function(){
   var out=new Uint8Array(S.u8);

@@ -220,6 +220,37 @@ public class FloatService extends Service {
     }
 
     private class NativeBridge {
+        private File fileOf(String name) {
+            return new File(getCacheDir(), name.replaceAll("[^A-Za-z0-9._-]", "_"));
+        }
+
+        @JavascriptInterface
+        public void chunk(String name, String b64, boolean first) {
+            try {
+                FileOutputStream o = new FileOutputStream(fileOf(name), !first);
+                o.write(Base64.decode(b64, Base64.DEFAULT));
+                o.close();
+            } catch (Exception e) {
+                Toast.makeText(FloatService.this, "Erro ao salvar: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            }
+        }
+
+        @JavascriptInterface
+        public void finish(String name) {
+            try {
+                Uri u = FileProvider.getUriForFile(FloatService.this, getPackageName() + ".fileprovider", fileOf(name));
+                Intent s = new Intent(Intent.ACTION_SEND);
+                s.setType("application/octet-stream");
+                s.putExtra(Intent.EXTRA_STREAM, u);
+                s.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                Intent c = Intent.createChooser(s, "Salvar " + name);
+                c.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(c);
+            } catch (Exception e) {
+                Toast.makeText(FloatService.this, "Erro ao compartilhar: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            }
+        }
+
         @JavascriptInterface
         public void save(String name, String b64) {
             try {
