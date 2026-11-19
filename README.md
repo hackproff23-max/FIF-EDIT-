@@ -32,3 +32,6 @@ O token do `gitpush` precisa das permissões `repo` e `workflow`.
 O workflow `.github/workflows/apk.yml` empacota o `index.html` com Capacitor e gera o APK a cada push.
 Baixe em *Releases → FIF-EDIT (APK mais recente)* ou em *Actions → Build APK → Artifacts*.
 No app, **Baixar save editado** abre o menu de compartilhar: escolha *Salvar em arquivos* e depois copie o arquivo para a pasta do jogo (mesmo nome).
+
+## Janela flutuante
+No app, toque em **Abrir como janela flutuante** (libere *Sobrepor a outros apps* na primeira vez). Uma bolinha ⚽ fica por cima do jogo: toque para abrir/minimizar o editor, arraste a bolinha ou a barra do painel para mover. O ✕ fecha tudo. Ao baixar, o menu de compartilhar abre; salve em Arquivos e copie para a pasta do jogo.

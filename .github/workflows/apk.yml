@@ -25,6 +25,13 @@ jobs:
         run: |
           npx cap add android
           npx cap sync android
+      - name: Adicionar janela flutuante
+        run: |
+          D=android/app/src/main/java/com/hackproff/fifedit
+          mkdir -p $D
+          cp native/*.java $D/
+          python3 native/patch_manifest.py android/app/src/main/AndroidManifest.xml
+          npx cap sync android
       - name: Compilar APK
         working-directory: android
         run: ./gradlew assembleDebug --no-daemon

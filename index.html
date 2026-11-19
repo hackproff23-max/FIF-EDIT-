@@ -32,6 +32,7 @@ details summary{cursor:pointer;font-weight:600}
 <body>
 <h1>⚽ FIF-EDIT · Camisas FIFA 14</h1>
 <p class="s">Edita só o número da camisa do save da carreira. Carregue o fifa.db para ver nomes de jogadores e times. Funciona offline no navegador.</p>
+<button class="btn sec" id="fl" hidden style="margin-bottom:10px">Abrir como janela flutuante</button>
 
 <div class="card">
   <h2>1. Arquivo fifa.db (nomes)</h2>
@@ -140,6 +141,11 @@ function parse(b){
 }
 function readF(inp,cb){var f=inp.files[0];if(!f)return;var r=new FileReader();r.onload=function(){cb(new Uint8Array(r.result),f.name)};r.readAsArrayBuffer(f);inp.value=''}
 
+if(window.Capacitor&&Capacitor.isNativePlatform&&Capacitor.isNativePlatform()&&!window.Native)$('fl').hidden=false;
+$('fl').onclick=function(){
+  Capacitor.registerPlugin('Float').start().then(function(r){
+    alert(r&&r.needsPermission?'Ative "Sobrepor a outros apps" para o FIF-EDIT na tela que abriu, volte e toque de novo.':'Pronto! Abra o jogo e toque na bolinha ⚽ para usar o editor por cima dele.')
+  }).catch(function(e){alert('Não consegui abrir a janela flutuante.')})};
 $('pickdb').onclick=function(){$('fd').click()};
 $('fd').onchange=function(){readF(this,function(b,dn){
   var r=null;try{r=parseDb(b)}catch(e){}
@@ -263,12 +269,13 @@ function zip(name,data){
   v.setUint32(e,0x06054b50,true);v.setUint16(e+8,1,true);v.setUint16(e+10,1,true);v.setUint32(e+12,46+nm.length,true);v.setUint32(e+16,L+n,true);
   return o;
 }
+function toB64(d){var bs='';for(var q=0;q<d.length;q+=0x8000)bs+=String.fromCharCode.apply(null,d.subarray(q,q+0x8000));return btoa(bs)}
 async function saveOut(name,data){
   try{
+    if(window.Native&&window.Native.save){window.Native.save(name,toB64(data));return}
     if(window.Capacitor&&Capacitor.isNativePlatform&&Capacitor.isNativePlatform()){
-      var bs='';for(var q=0;q<data.length;q+=0x8000)bs+=String.fromCharCode.apply(null,data.subarray(q,q+0x8000));
       var FS=Capacitor.registerPlugin('Filesystem'),SH=Capacitor.registerPlugin('Share');
-      var w=await FS.writeFile({path:name,data:btoa(bs),directory:'CACHE'});
+      var w=await FS.writeFile({path:name,data:toB64(data),directory:'CACHE'});
       await SH.share({title:name,files:[w.uri],dialogTitle:'Salvar save editado'});return;
     }
     if(window.claude&&window.claude.use){
