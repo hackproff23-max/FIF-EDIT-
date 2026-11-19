@@ -180,6 +180,7 @@ public class FloatService extends Service {
         web.getSettings().setAllowFileAccess(true);
         web.getSettings().setAllowContentAccess(true);
         web.addJavascriptInterface(new NativeBridge(), "Native");
+        web.addJavascriptInterface(new DirectIO(this, web), "DirectIO");
         web.setWebChromeClient(new WebChromeClient() {
             @Override public boolean onShowFileChooser(WebView v, ValueCallback<Uri[]> cb, FileChooserParams p) {
                 if (fileCb != null) fileCb.onReceiveValue(null);

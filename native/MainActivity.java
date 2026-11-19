@@ -8,5 +8,10 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(FloatPlugin.class);
         super.onCreate(savedInstanceState);
+        try {
+            android.webkit.WebView w = getBridge().getWebView();
+            w.addJavascriptInterface(new DirectIO(this, w), "DirectIO");
+        } catch (Exception e) {
+        }
     }
 }

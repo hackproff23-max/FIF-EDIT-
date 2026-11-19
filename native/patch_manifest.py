@@ -10,6 +10,7 @@ comp = '''        <service android:name=".FloatService" android:exported="false"
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="floating_editor_overlay" />
         </service>
         <activity android:name=".PickerActivity" android:exported="false" android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+        <activity android:name=".DirectPickActivity" android:exported="false" android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 '''
 assert '</application>' in s and '<application' in s
 s = s.replace('</application>', comp + '    </application>', 1)

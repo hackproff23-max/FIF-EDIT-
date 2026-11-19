@@ -149,7 +149,7 @@ $('fl').onclick=function(){
   plug('Float').start().then(function(r){
     alert(r&&r.needsPermission?'Ative "Sobrepor a outros apps" para o FIF-EDIT na tela que abriu, volte e toque de novo.':'Pronto! Abra o jogo e toque na bolinha ⚽ para usar o editor por cima dele.')
   }).catch(function(e){alert('Não consegui abrir a janela flutuante.')})};
-$('pickdb').onclick=function(){$('fd').click()};
+$('pickdb').onclick=function(){if(dio())directLoad('db');else $('fd').click()};
 $('fd').onchange=function(){readF(this,function(b,dn){
   var r=null;try{r=parseDb(b)}catch(e){}
   if(!r){$('dbe').textContent='Não consegui ler esse arquivo como fifa.db (tabelas de jogadores/times não encontradas).';return}
@@ -157,7 +157,7 @@ $('fd').onchange=function(){readF(this,function(b,dn){
   idbPut('db',{name:DBX.name,raw:b}).catch(function(){$('dbe').textContent='fifa.db carregado, mas não consegui guardar offline; recarregue na próxima vez.'});
   dbInfo();if(S){fillTeams();draw()}
 })};
-$('pick').onclick=function(){$('f').click()};
+$('pick').onclick=function(){if(dio())directLoad('save');else $('f').click()};
 $('f').onchange=function(){readF(this,function(b,n){
   var s=parse(b);if(!s){$('err').textContent='Não achei a tabela de jogadores. É mesmo o SAVECAREER?';return}
   $('err').textContent='';S=s;fname=n;OLD=null;$('cmp').textContent='';
@@ -293,9 +293,49 @@ function plug(n){
     if(C&&typeof C.nativePromise==='function')return C.nativePromise(n,m,o||{});
     return Promise.reject(new Error('Plugin '+n+' indisponível'))}}})
 }
-var CH=3*256*1024;
-async function saveOut(name,data){
+function dio(){return window.DirectIO||null}
+var PEND={};
+window.__directPicked=function(slot,ok){var f=PEND[slot];delete PEND[slot];if(f)f(ok)};
+function dpick(slot){return new Promise(function(res){PEND[slot]=res;dio().pick(slot)})}
+async function dread(slot){
+  var n=dio().size(slot);if(n<0)throw new Error('nao consegui ler o arquivo escolhido');
+  var out=new Uint8Array(n),C=3*256*1024;
+  for(var o=0;o<n;o+=C){
+    var l=Math.min(C,n-o),s=dio().read(slot,o,l);
+    if(s.indexOf('ERR:')===0)throw new Error(s.slice(4));
+    var bin=atob(s);if(bin.length!==l)throw new Error('leitura incompleta');
+    for(var k=0;k<l;k++)out[o+k]=bin.charCodeAt(k);
+    await new Promise(function(r){setTimeout(r,0)})}
+  return out}
+async function dwrite(slot,data){
+  var C=3*256*1024,r;
+  for(var o=0;o<data.length;o+=C){
+    r=dio().wchunk(slot,toB64(data.subarray(o,o+C)),o===0);
+    if(r)throw new Error(r.replace(/^ERR:/,''))}
+  r=dio().commit(slot);if(r)throw new Error(r.replace(/^ERR:/,''))}
+function lab(){var d=dio();
+  $('dl').textContent=(d&&d.has('save'))?'Salvar por cima do save':'Baixar save editado';
+  $('dldb').textContent=(d&&d.has('db'))?'Salvar por cima do fifa.db':'Baixar fifa.db'}
+async function directLoad(slot){
+  var isDb=slot==='db',inp=isDb?$('fd'):$('f');
   try{
+    var ok=await dpick(slot);if(!ok)return;
+    var nm=dio().name(slot)||(isDb?'fifa.db':'SAVECAREER');
+    (isDb?$('dbe'):$('err')).textContent='Lendo '+nm+'...';
+    var b=await dread(slot);
+    inp.onchange.call({files:[new File([b],nm)],value:''});
+    lab()
+  }catch(e){var m='Erro ao abrir: '+((e&&e.message)||e);(isDb?$('dbe'):$('err')).textContent=m;alert(m)}
+}
+lab();setTimeout(lab,600);
+var CH=3*256*1024;
+async function saveOut(name,data,slot){
+  try{
+    if(slot&&dio()&&dio().has(slot)){
+      var nm0=dio().name(slot)||name;
+      try{await dwrite(slot,data)}catch(e){var m2='Nao consegui salvar por cima: '+((e&&e.message)||e)+'. Escolha o arquivo de novo.';$('err').textContent=m2;alert(m2);return false}
+      alert('Salvo por cima de '+nm0+'. Copia do original em Android/data/com.hackproff.fifedit/files/backup');
+      return true}
     if(window.Native&&window.Native.chunk){
       for(var o=0;o<data.length;o+=CH)window.Native.chunk(name,toB64(data.subarray(o,o+CH)),o===0);
       window.Native.finish(name);return}
@@ -319,9 +359,10 @@ $('dl').onclick=async function(){
   var out=new Uint8Array(S.u8);
   for(var i=0;i<cur.length;i++)if(cur[i]!==orig[i]){if(!(cur[i]>=1&&cur[i]<=99)){$('err').textContent='Número inválido: use de 1 a 99.';return}var o=S.rows[i].o+8;out[o]=((cur[i]-1)<<1)|1}
   stampCrc(out);
-  await saveOut(fname,out);
+  var okd=await saveOut(fname,out,'save');
+  if(okd===true){S.u8=out;orig=cur.slice();draw();upd()}
 };
-$('dldb').onclick=function(){if(DBX)saveOut(DBX.name,DBX.raw)};
+$('dldb').onclick=function(){if(DBX)saveOut(DBX.name,DBX.raw,'db')};
 })();
 </script>
 </body>
