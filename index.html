@@ -98,7 +98,7 @@ function parseDb(b){
   if(L<400)return null;
   var nt=dv.getUint32(8,true);if(nt<5||nt>2000||12+4*nt>L)return null;
   var offs=[];for(var i=0;i<nt;i++)offs.push(dv.getUint32(12+4*i,true));
-  var P=null,T=null,PM={},CNT={};
+  var P=null,T=null,PM={},CNT={},NAT={};
   for(var i=0;i<nt;i++){
     var o=offs[i],nx=i+1<nt?offs[i+1]:L;if(o+8>L||nx<=o)continue;
     var c=dv.getUint32(o,true),sz=nx-o;
@@ -110,7 +110,7 @@ function parseDb(b){
       if(ok>=ch*0.95){P={};
         for(var k=0;k<c;k++){var r=o+8+72*k,id=dv.getUint32(r,true);
           var pf=dv.getUint32(r+4,true),pl=dv.getUint32(r+8,true),pm=dv.getUint32(r+12,true);
-          PM[id]={f:pf,l:pl,m:pm,r:r};[pf,pl,pm].forEach(function(x){if(x)CNT[x]=(CNT[x]||0)+1});
+          PM[id]={f:pf,l:pl,m:pm,r:r};NAT[id]=((b[r+65]>>2)|((b[r+66]&3)<<6))+1;[pf,pl,pm].forEach(function(x){if(x)CNT[x]=(CNT[x]||0)+1});
           var f=rs(b,dv,dv.getUint32(r+4,true))||'',l=rs(b,dv,dv.getUint32(r+8,true))||'',m=rs(b,dv,dv.getUint32(r+12,true))||'';
           var full=(f+' '+l).trim(),nm=full||m;
           if(m&&full&&full.indexOf(m)<0)nm+=' ('+m+')';
@@ -123,8 +123,69 @@ function parseDb(b){
         for(var k=0;k<c;k++){var r=o+8+44*k,a=rs(b,dv,dv.getUint32(r+4,true));if(a)T[dv.getUint32(r,true)]=a}}
     }
   }
-  return(P&&T)?{p:P,t:T,pm:PM,cnt:CNT}:null;
+  return(P&&T)?{p:P,t:T,pm:PM,cnt:CNT,nat:NAT,geo:geoParse(b,dv,offs,L,P,T,NAT)}:null;
 }
+var ISO={'Albania':'AL','Armenia':'AM','Austria':'AT','Azerbaijan':'AZ','Belarus':'BY','Belgium':'BE','Bosnia Herzegovina':'BA','Bulgaria':'BG','Croatia':'HR','Cyprus':'CY','Czech Republic':'CZ','Denmark':'DK','Montenegro':'ME','Faroe Islands':'FO','Finland':'FI','France':'FR','FYR Macedonia':'MK','Georgia':'GE','Germany':'DE','Greece':'GR','Hungary':'HU','Iceland':'IS','Ireland Republic':'IE','Israel':'IL','Italy':'IT','Latvia':'LV','Liechtenstein':'LI','Lithuania':'LT','Luxembourg':'LU','Malta':'MT','Moldova':'MD','Holland':'NL','Norway':'NO','Poland':'PL','Portugal':'PT','Romania':'RO','Russia':'RU','Slovakia':'SK','Slovenia':'SI','Spain':'ES','Sweden':'SE','Switzerland':'CH','Turkey':'TR','Ukraine':'UA','Serbia':'RS','Argentina':'AR','Bolivia':'BO','Brazil':'BR','Chile':'CL','Colombia':'CO','Ecuador':'EC','Paraguay':'PY','Peru':'PE','Uruguay':'UY','Venezuela':'VE','Antigua and Barbuda':'AG','Barbados':'BB','Bermuda':'BM','Canada':'CA','Costa Rica':'CR','Cuba':'CU','El Salvador':'SV','Grenada':'GD','Guatemala':'GT','Guyana':'GY','Haiti':'HT','Honduras':'HN','Jamaica':'JM','Mexico':'MX','Montserrat':'MS','Curaçao':'CW','Panama':'PA','Puerto Rico':'PR','St Kitts Nevis':'KN','St Lucia':'LC','Suriname':'SR','Trinidad and Tobago':'TT','United States':'US','Algeria':'DZ','Angola':'AO','Benin':'BJ','Burkina Faso':'BF','Burundi':'BI','Cameroon':'CM','Cape Verde Islands':'CV','Central African Rep':'CF','Congo':'CG','Ivory Coast':'CI','DR Congo':'CD','Egypt':'EG','Equatorial Guinea':'GQ','Gabon':'GA','Gambia':'GM','Ghana':'GH','Guinea':'GN','Guinea Bissau':'GW','Kenya':'KE','Liberia':'LR','Libya':'LY','Madagascar':'MG','Mali':'ML','Mauritania':'MR','Mauritius':'MU','Morocco':'MA','Mozambique':'MZ','Namibia':'NA','Niger':'NE','Nigeria':'NG','Rwanda':'RW','São Tomé and Príncipe':'ST','Senegal':'SN','Sierra Leone':'SL','Somalia':'SO','South Africa':'ZA','Sudan':'SD','Tanzania':'TZ','Togo':'TG','Tunisia':'TN','Uganda':'UG','Zambia':'ZM','Zimbabwe':'ZW','Afghanistan':'AF','Bahrain':'BH','China PR':'CN','Guam':'GU','India':'IN','Indonesia':'ID','Iran':'IR','Iraq':'IQ','Japan':'JP','Jordan':'JO','Kazakhstan':'KZ','Korea DPR':'KP','Korea Republic':'KR','Kuwait':'KW','Lebanon':'LB','Oman':'OM','Palestinian Authority':'PS','Philippines':'PH','Saudi Arabia':'SA','Syria':'SY','Turkmenistan':'TM','Uzbekistan':'UZ','Australia':'AU','New Zealand':'NZ','Dominican Republic':'DO','Estonia':'EE','Comoros':'KM','New Caledonia':'NC'};
+var SPEC={'England':['Inglaterra',[0x1F3F4,0xE0067,0xE0062,0xE0065,0xE006E,0xE0067,0xE007F]],'Scotland':['Escócia',[0x1F3F4,0xE0067,0xE0062,0xE0073,0xE0063,0xE0074,0xE007F]],'Wales':['País de Gales',[0x1F3F4,0xE0067,0xE0062,0xE0077,0xE006C,0xE0073,0xE007F]],'Northern Ireland':['Irlanda do Norte',[0x1F1EC,0x1F1E7]],'Rest of World':['Resto do mundo',[0x1F30D]]};
+var LCOUNTRY={1:13,4:7,7:54,10:34,13:14,14:14,16:18,17:18,19:21,20:21,31:27,32:27,39:60,41:36,50:42,53:45,54:45,56:46,60:14,61:14,65:25,67:40,80:4,83:54,189:47,308:38,335:55,336:56,341:57,350:183,351:95,353:52};
+var PTA={'brasil':54,'inglaterra':14,'franca':18,'alemanha':21,'croacia':10,'belgica':7,'espanha':45,'uruguai':60,'holanda':34,'paises baixos':34,'noruega':36,'japao':163,'eua':95,'estados unidos':95,'dinamarca':13,'italia':27,'camaroes':103,'suica':47,'suecia':46,'turquia':48,'polonia':37,'romenia':39,'russia':40,'africa do sul':140,'costa do marfim':108,'egito':111,'australia':195,'coreia do sul':167,'mexico':83,'colombia':56,'escocia':42,'pais de gales':50,'irlanda':25,'grecia':22,'ucrania':49,'servia':51,'austria':4,'tunisia':145,'marrocos':129,'argelia':97,'nigeria':133,'gana':117,'senegal':136,'equador':57,'bolivia':53,'peru':59,'paraguai':58,'venezuela':61,'chile':55,'argentina':52,'portugal':38,'galatasaray sk':48,'fenerbahce':48,'besiktas':48,'antalyaspor':48,'istanbul basaksehir':48,'olympiacos cfp':22,'aek athens':22,'legia':37,'dynamo kiev':49,'shakhtar donetsk':49,'sheriff':33,'hibernian':42,'auckland city':198,'ferencvaros':23,'al ahly':111,'monterrey':83,'girondins de bordeaux':18};
+function norm(s){return String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim()}
+function geoParse(b,dv,offs,L,P,T,NAT){
+  try{
+    var nt=offs.length,C=null,LG=null,c12=[],c16=[],i,k,t;
+    function tb(i){var o=offs[i],nx=i+1<nt?offs[i+1]:L;if(o+8>L||nx<=o)return null;var c=dv.getUint32(o,true),sz=nx-o;if(!c||c>60000||(sz-8)%c)return null;return{o:o+8,c:c,rl:(sz-8)/c}}
+    function cell(t,k,j){return dv.getUint32(t.o+t.rl*k+4*j,true)}
+    function frac(t,j,ok){var n=Math.min(t.c,300),h=0,st=Math.max(1,Math.floor(t.c/n));var m=0;for(var q=0;q<t.c&&m<n;q+=st,m++)if(ok(cell(t,q,j)))h++;return m?h/m:0}
+    for(i=0;i<nt;i++){t=tb(i);if(!t)continue;
+      if(t.rl===12){
+        if(!C&&t.c>50&&t.c<400&&rs(b,dv,cell(t,0,1))==='No Country Set'){C={};for(k=0;k<t.c;k++){var nm=rs(b,dv,cell(t,k,1));if(nm)C[cell(t,k,0)]=nm}}
+        else if(!LG&&t.c>10&&t.c<400){var h=0;for(k=0;k<t.c;k++){var s=rs(b,dv,cell(t,k,1));if(s&&/\(\d\)\s*$/.test(s))h++}
+          if(h>=t.c*0.4){LG={};for(k=0;k<t.c;k++)LG[cell(t,k,0)]=1}}
+        if(t.c>=100&&t.c<=5000)c12.push(t)}
+      else if(t.rl===16&&t.c>1000)c16.push(t)}
+    if(!C)return null;
+    var tl={},sq={};
+    if(LG)for(i=0;i<c12.length;i++){t=c12[i];
+      if(frac(t,1,function(v){return T[v]!==undefined})>=0.95&&frac(t,0,function(v){return LG[v]})>=0.95){for(k=0;k<t.c;k++){var tid=cell(t,k,1);if(tl[tid]===undefined)tl[tid]=cell(t,k,0)}break}}
+    for(i=0;i<c16.length;i++){t=c16[i];
+      if(frac(t,0,function(v){return T[v]!==undefined})>=0.95&&frac(t,1,function(v){return NAT[v]!==undefined})>=0.95){
+        for(k=0;k<t.c;k++){var a=cell(t,k,0),p=cell(t,k,1),n=NAT[p];if(n===undefined||T[a]===undefined)continue;var q=sq[a]||(sq[a]={});q[n]=(q[n]||0)+1}break}}
+    var alias={},tc={},id;
+    for(id in C)alias[norm(C[id])]=+id;
+    for(var a2 in PTA)alias[a2]=PTA[a2];
+    for(id in T){var tid2=+id,n=0,lg=tl[tid2],nm2=norm(T[id]);
+      if(lg!==undefined&&LCOUNTRY[lg]&&C[LCOUNTRY[lg]])n=LCOUNTRY[lg];
+      else if(/\b(world xi|classic xi|lendarios|legends?)\b/.test(nm2))n=0;
+      else if(alias[nm2])n=alias[nm2];
+      else{var qq=sq[tid2];if(qq){var tot=0,bn=0,bk=0;for(var x in qq){tot+=qq[x];if(qq[x]>bk){bk=qq[x];bn=+x}}
+        if(tot>=8&&bk>=tot*0.5&&C[bn])n=bn}}
+      tc[tid2]=n}
+    return{C:C,tc:tc}
+  }catch(e){return null}
+}
+var DN=null;try{DN=new Intl.DisplayNames(['pt-BR'],{type:'region'})}catch(e){}
+var CN={};
+function cname(n){
+  if(CN[n])return CN[n];
+  if(!n)return 'Outros / sem país';
+  var raw=(DB.g&&DB.g.C[n])||'',r=raw;
+  if(SPEC[raw])r=SPEC[raw][0];
+  else if(ISO[raw]&&DN){try{r=DN.of(ISO[raw])||raw}catch(e){}}
+  return CN[n]=r||('País '+n)}
+function flag(n){
+  var raw=(DB.g&&DB.g.C[n])||'';
+  if(SPEC[raw])return String.fromCodePoint.apply(null,SPEC[raw][1]);
+  var c=ISO[raw];if(!c)return '🌍';
+  return String.fromCodePoint(0x1F1E6+c.charCodeAt(0)-65,0x1F1E6+c.charCodeAt(1)-65)}
+function natTxt(p){var n=DB.n&&DB.n[p];if(!n||!DB.g||!DB.g.C[n])return '';return flag(n)+' '+cname(n)+' · '}
+function teamFlag(t){var n=DB.g&&DB.g.tc[t];return n?flag(n)+' ':''}
+function teamOpts(ids){
+  function opt(t){return'<option value="'+t+'">'+esc(tn(t))+' · ID '+t+' ('+S.teams[t].length+')</option>'}
+  var g=DB.g;if(!g)return ids.map(opt).join('');
+  var grp={};ids.forEach(function(t){var n=g.tc[t]||0;(grp[n]=grp[n]||[]).push(t)});
+  var ks=Object.keys(grp).map(Number).sort(function(a,b){if(!a)return 1;if(!b)return -1;return cname(a).localeCompare(cname(b),'pt')});
+  return ks.map(function(n){var l=grp[n].sort(function(a,b){return tn(a).localeCompare(tn(b),'pt')});
+    return'<optgroup label="'+esc((n?flag(n)+' ':'🌍 ')+cname(n)+' ('+l.length+')')+'">'+l.map(opt).join('')+'</optgroup>'}).join('')}
 function dbInfo(){var np=Object.keys(DB.p).length,nt=Object.keys(DB.t).length;
   $('dbs').textContent=np?('fifa.db carregado: '+np+' jogadores e '+nt+' times.'):''}
 
@@ -153,7 +214,7 @@ $('pickdb').onclick=function(){if(dio())directLoad('db');else $('fd').click()};
 $('fd').onchange=function(){readF(this,function(b,dn){
   var r=null;try{r=parseDb(b)}catch(e){}
   if(!r){$('dbe').textContent='Não consegui ler esse arquivo como fifa.db (tabelas de jogadores/times não encontradas).';return}
-  $('dbe').textContent='';DB={p:r.p,t:r.t};DBX={raw:b,pm:r.pm,cnt:r.cnt,name:dn||'fifa.db',dirty:false};$('dldb').hidden=true;
+  $('dbe').textContent='';DB={p:r.p,t:r.t,n:r.nat,g:r.geo};DBX={raw:b,pm:r.pm,cnt:r.cnt,name:dn||'fifa.db',dirty:false};$('dldb').hidden=true;
   idbPut('db',{name:DBX.name,raw:b}).catch(function(){$('dbe').textContent='fifa.db carregado, mas não consegui guardar offline; recarregue na próxima vez.'});
   dbInfo();if(S){fillTeams();draw()}
 })};
@@ -170,7 +231,7 @@ $('f').onchange=function(){readF(this,function(b,n){
 })};
 function fillTeams(){
   var ids=Object.keys(S.teams).map(Number).sort(function(a,b){return a-b});
-  $('tm').innerHTML=ids.map(function(t){return'<option value="'+t+'">'+esc(tn(t))+' · ID '+t+' ('+S.teams[t].length+')</option>'}).join('');
+  $('tm').innerHTML=teamOpts(ids);
   $('tm').value=ct;
 }
 $('pick2').onclick=function(){$('f2').click()};
@@ -185,11 +246,11 @@ function draw(){
   var idx=(S.teams[ct]||[]).slice(),cn={};
   idx.sort(function(a,b){return (isNew(b)-isNew(a))||(cur[a]-cur[b])});
   idx.forEach(function(i){if(cur[i])cn[cur[i]]=(cn[cur[i]]||0)+1});
-  var h='<h2>'+esc(tn(ct))+'</h2>',d=0;
+  var h='<h2>'+teamFlag(ct)+esc(tn(ct))+'</h2>',d=0;
   idx.forEach(function(i){
     var dup=cur[i]&&cn[cur[i]]>1;if(dup)d++;
     var nw=isNew(i);
-    h+='<div class="row'+(cur[i]!==orig[i]?' ch':(nw?' nw':''))+'"><div class="pid"><b data-p="'+S.rows[i].p+'">'+esc(pn(S.rows[i].p))+(nw?'<span class="tag">NOVO</span>':'')+'</b><small>ID '+S.rows[i].p+' · '+(orig[i]?'camisa '+orig[i]:'sem número')+'</small></div>'+
+    h+='<div class="row'+(cur[i]!==orig[i]?' ch':(nw?' nw':''))+'"><div class="pid"><b data-p="'+S.rows[i].p+'">'+esc(pn(S.rows[i].p))+(nw?'<span class="tag">NOVO</span>':'')+'</b><small>'+natTxt(S.rows[i].p)+'ID '+S.rows[i].p+' · '+(orig[i]?'camisa '+orig[i]:'sem número')+'</small></div>'+
        '<input class="num'+(dup?' dup':'')+'" type="text" inputmode="numeric" pattern="[1-9][0-9]?" maxlength="2" autocomplete="off" placeholder="-" value="'+(cur[i]||'')+'" data-i="'+i+'"></div>';
   });
   if(d)h+='<div class="warn">Há números repetidos neste time.</div>';
@@ -261,7 +322,7 @@ $('imp').onclick=function(){
   });sv();$('ta').value='';if(S){fillTeams();draw()}alert(c+' nomes importados.')};
 dbInfo();
 idbGet('db').then(function(x){if(!x||!x.raw)return;var r=null;try{r=parseDb(x.raw)}catch(e){}
-  if(!r)return;DB={p:r.p,t:r.t};DBX={raw:x.raw,pm:r.pm,cnt:r.cnt,name:x.name||'fifa.db',dirty:false};
+  if(!r)return;DB={p:r.p,t:r.t,n:r.nat,g:r.geo};DBX={raw:x.raw,pm:r.pm,cnt:r.cnt,name:x.name||'fifa.db',dirty:false};
   dbInfo();$('dbs').textContent+=' (guardado offline neste app)';if(S){fillTeams();draw()}}).catch(function(){});
 $('exp').onclick=function(){
   var o=[];for(var p in N.p)o.push('p,'+p+','+N.p[p]);for(var t in N.t)o.push('t,'+t+','+N.t[t]);
