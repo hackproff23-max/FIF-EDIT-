@@ -186,6 +186,26 @@ function teamOpts(ids){
   var ks=Object.keys(grp).map(Number).sort(function(a,b){if(!a)return 1;if(!b)return -1;return cname(a).localeCompare(cname(b),'pt')});
   return ks.map(function(n){var l=grp[n].sort(function(a,b){return tn(a).localeCompare(tn(b),'pt')});
     return'<optgroup label="'+esc((n?flag(n)+' ':'🌍 ')+cname(n)+' ('+l.length+')')+'">'+l.map(opt).join('')+'</optgroup>'}).join('')}
+function editNat(pid){
+  if(!DBX||!DBX.pm[pid]||!DB.g){alert('Carregue o fifa.db primeiro (passo 1).');return}
+  var q=prompt('Nova nacionalidade de '+pn(pid)+' (nome do país, ex.: Brasil, Portugal, Japão):','');
+  if(q===null)return;var nq=norm(q);if(!nq)return;
+  var m=[],id;
+  for(id in DB.g.C){var n=+id;if(!n)continue;if(norm(cname(n)).indexOf(nq)>=0||norm(DB.g.C[id]).indexOf(nq)>=0)m.push(n)}
+  if(!m.length){alert('País não encontrado. Tente o nome em português ou inglês.');return}
+  var pick=m[0];
+  if(m.length>1){
+    m=m.slice(0,9);
+    var k=prompt('Qual deles? Digite o número:\n'+m.map(function(n,i){return(i+1)+'. '+flag(n)+' '+cname(n)}).join('\n'),'1');
+    if(k===null)return;k=parseInt(k,10);if(!(k>=1&&k<=m.length))return;pick=m[k-1]}
+  var r=DBX.pm[pid].r,v=pick-1,b=DBX.raw;
+  b[r+65]=(b[r+65]&0x03)|((v&0x3F)<<2);
+  b[r+66]=(b[r+66]&0xFC)|((v>>6)&3);
+  DB.n[pid]=pick;
+  idbPut('db',{name:DBX.name,raw:DBX.raw}).catch(function(){});
+  DBX.dirty=true;$('dldb').hidden=false;
+  $('err').textContent='Nacionalidade alterada. Toque em "'+$('dldb').textContent+'" para gravar no fifa.db.';
+  draw()}
 function dbInfo(){var np=Object.keys(DB.p).length,nt=Object.keys(DB.t).length;
   $('dbs').textContent=np?('fifa.db carregado: '+np+' jogadores e '+nt+' times.'):''}
 
@@ -250,7 +270,7 @@ function draw(){
   idx.forEach(function(i){
     var dup=cur[i]&&cn[cur[i]]>1;if(dup)d++;
     var nw=isNew(i);
-    h+='<div class="row'+(cur[i]!==orig[i]?' ch':(nw?' nw':''))+'"><div class="pid"><b data-p="'+S.rows[i].p+'">'+esc(pn(S.rows[i].p))+(nw?'<span class="tag">NOVO</span>':'')+'</b><small>'+natTxt(S.rows[i].p)+'ID '+S.rows[i].p+' · '+(orig[i]?'camisa '+orig[i]:'sem número')+'</small></div>'+
+    h+='<div class="row'+(cur[i]!==orig[i]?' ch':(nw?' nw':''))+'"><div class="pid"><b data-p="'+S.rows[i].p+'">'+esc(pn(S.rows[i].p))+(nw?'<span class="tag">NOVO</span>':'')+'</b><small><span data-nat="'+S.rows[i].p+'" style="text-decoration:underline dotted">'+natTxt(S.rows[i].p)+'</span>ID '+S.rows[i].p+' · '+(orig[i]?'camisa '+orig[i]:'sem número')+'</small></div>'+
        '<input class="num'+(dup?' dup':'')+'" type="text" inputmode="numeric" pattern="[1-9][0-9]?" maxlength="2" autocomplete="off" placeholder="-" value="'+(cur[i]||'')+'" data-i="'+i+'"></div>';
   });
   if(d)h+='<div class="warn">Há números repetidos neste time.</div>';
@@ -262,6 +282,7 @@ function draw(){
       if(isNaN(v)||v<1||v>99){this.value=cur[+this.dataset.i]||'';return}
       cur[+this.dataset.i]=v;draw();upd()}});
   [].forEach.call($('list').querySelectorAll('b[data-p]'),function(el){el.onclick=function(){editName(this.dataset.p)}});
+  [].forEach.call($('list').querySelectorAll('span[data-nat]'),function(el){el.onclick=function(){editNat(this.dataset.nat)}});
 }
 function rawStr(id,key){var m=DBX.pm[id];if(!m||!m[key])return null;var b=DBX.raw,ptr=m[key],dv=new DataView(b.buffer,b.byteOffset,b.byteLength);
   var cap=dv.getUint16(ptr,true),t=ptr+2,e=t;while(e<t+cap&&b[e])e++;return{ptr:ptr,cap:cap,txt:new TextDecoder().decode(b.subarray(t,e))}}
