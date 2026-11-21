@@ -251,7 +251,7 @@ $('f').onchange=function(){readF(this,function(b,n){
   cur=s.rows.map(function(r){return r.n});orig=cur.slice();
   ct=S.teams[73]?73:+Object.keys(S.teams)[0];
   fillTeams();$('ed').hidden=false;$('bar').hidden=false;draw();upd();
-  SAVEB=b;try{$('si').innerHTML=saveInfoHtml(b,n);$('si').hidden=false}catch(e){}
+  SAVEB=b;try{$('si').innerHTML=saveInfoHtml(b,n);$('si').hidden=false;wireMoney()}catch(e){}
   if(Object.keys(DB.p).length){var m=0,u={};s.rows.forEach(function(r){if(!u[r.p]){u[r.p]=1;if(DB.p[r.p])m++}});
     var tot=Object.keys(u).length;$('err').textContent='';$('dbs').textContent='fifa.db: '+m+' de '+tot+' jogadores do save reconhecidos.'}
   else $('err').textContent='Dica: carregue o fifa.db no passo 1 para ver os nomes.';
@@ -335,6 +335,31 @@ var EDF=[
 function rdBits(b,r,s,w){var v=0;for(var i=0;i<w;i++){var t=s+i;v|=((b[r+(t>>3)]>>(t&7))&1)<<i}return v}
 function wrBits(b,r,s,w,v){for(var i=0;i<w;i++){var t=s+i,y=r+(t>>3),m=1<<(t&7);if((v>>i)&1)b[y]|=m;else b[y]&=(~m)&255}}
 /*FIFEDIT-SAVE-INFO*/
+/*FIFEDIT-MONEY*/
+var MONEYD=false;
+function moneyFmt(n){return '$'+String(n).replace(/\B(?=(\d{3})+(?!\d))/g,'.')}
+function moneyFloat(b){
+  var dv=new DataView(b.buffer,b.byteOffset,b.byteLength);
+  for(var p=24;p+16<=b.length;p+=4)
+    if(dv.getUint32(p,true)===4&&dv.getUint32(p+4,true)===5&&dv.getUint32(p+8,true)===936){
+      var f=p+28;return(f+4<=b.length&&dv.getFloat32(f,true)===Math.fround(dv.getUint32(16,true)))?f:-1}
+  return -1}
+function applyMoney(b,v){
+  var f=moneyFloat(b);if(f<0)return false;
+  var dv=new DataView(b.buffer,b.byteOffset,b.byteLength);
+  dv.setUint32(16,v,true);dv.setFloat32(f,v,true);
+  return dv.getUint32(16,true)===v&&dv.getFloat32(f,true)===Math.fround(v)}
+function wireMoney(){
+  var el=$('mny');if(!el||!S)return;
+  el.onclick=function(){
+    var dv=new DataView(S.u8.buffer,S.u8.byteOffset,S.u8.byteLength),cur=dv.getUint32(16,true);
+    var q=prompt('Novo dinheiro do time (só números, 0 a 2000000000):',String(cur));if(q===null)return;
+    q=q.replace(/[^\d]/g,'');var v=parseInt(q,10);
+    if(!q||isNaN(v)||v<0||v>2000000000){alert('Valor inválido.');return}
+    if(!applyMoney(S.u8,v)){alert('Não consegui gravar o dinheiro (estrutura do save diferente). Nada foi alterado.');return}
+    MONEYD=true;upd();
+    $('si').innerHTML=saveInfoHtml(S.u8,fname);wireMoney();
+    $('err').textContent='Dinheiro alterado para '+moneyFmt(v)+'. Toque em "'+$('dl').textContent+'" para gravar no save (faça backup).'}}
 var SAVEB=null;
 function hx(v){return ('00000000'+(v>>>0).toString(16)).slice(-8)}
 function saveInfoHtml(b,name){
@@ -349,8 +374,13 @@ function saveInfoHtml(b,name){
   ds.forEach(function(d,i){h+=li('Data no cabeçalho '+(i+1),esc(d),'texto legível; o significado não está confirmado')});
   h+=li('Jogadores com time no save',Object.keys(pl).length+' ('+rows+' vínculos)','confirmado');
   h+=li('Times com elenco no save',Object.keys(tms).length,'confirmado');
-  h+=li('Valor bruto no cabeçalho (byte 20)',dv.getUint32(20,true),'NÃO confirmado; pode ser orçamento ou não');
-  h+='<div class="note" style="margin-top:8px">Dinheiro (orçamento, salários, valor de mercado) e overall ainda não foram localizados no save com certeza, então não são mostrados como fato. O overall e o valor de mercado também não aparecem como campo: o jogo calcula.</div>';
+  var mf=moneyFloat(b),mv=dv.getUint32(16,true);
+  h+=li('Dinheiro atual',moneyFmt(mv),'confirmado: igual ao valor mostrado no jogo');
+  h+=li('Orçamento inicial do time',moneyFmt(dv.getUint32(20,true)),'confirmado: igual ao mostrado ao escolher o time');
+  if(mf<0)h+='<div class="warn">Não achei a segunda cópia do dinheiro; a edição fica desativada.</div>';
+  else if(dv.getFloat32(mf,true)!==Math.fround(mv))h+='<div class="warn">As duas cópias do dinheiro estão diferentes ('+moneyFmt(Math.round(dv.getFloat32(mf,true)))+').</div>';
+  else h+='<button class="btn sec" id="mny">Editar dinheiro</button>';
+  h+='<div class="note" style="margin-top:8px">Confirmados: dinheiro atual e orçamento inicial. Ainda não localizados: salários, valor de mercado e overall (o jogo calcula os dois últimos a partir dos atributos).</div>';
   return h}
 function rawRecs(pid){
   if(!SAVEB)return 'Carregue o save (passo 2).';
@@ -394,7 +424,7 @@ function openEd(pid){
 }
 $('edm').onclick=function(e){if(e.target===this)closeEd()};
 function nch(){var c=0;for(var i=0;i<cur.length;i++)if(cur[i]!==orig[i])c++;return c}
-function upd(){var c=nch();$('cnt').textContent=c+(c===1?' alteração':' alterações');$('dl').disabled=!c}
+function upd(){var c=nch();$('cnt').textContent=c+(c===1?' alteração':' alterações');$('dl').disabled=!(c||MONEYD)}
 $('tm').onchange=function(){ct=+this.value;draw()};
 $('rt').onclick=function(){var v=prompt('Nome do time '+ct+':',N.t[ct]||'');if(v===null)return;if(v.trim())N.t[ct]=v.trim();else delete N.t[ct];sv();fillTeams();draw()};
 function goP(p){for(var i=0;i<S.rows.length;i++)if(S.rows[i].p===p){ct=S.rows[i].t;$('tm').value=ct;$('pr').innerHTML='';draw();$('err').textContent='';return true}return false}
@@ -529,7 +559,7 @@ $('dl').onclick=async function(){
   for(var i=0;i<cur.length;i++)if(cur[i]!==orig[i]){if(!(cur[i]>=1&&cur[i]<=99)){$('err').textContent='Número inválido: use de 1 a 99.';return}var o=S.rows[i].o+8;out[o]=((cur[i]-1)<<1)|1}
   stampCrc(out);
   var okd=await saveOut(fname,out,'save');
-  if(okd===true){S.u8=out;orig=cur.slice();draw();upd()}
+  if(okd===true){S.u8=out;MONEYD=false;orig=cur.slice();draw();upd()}
 };
 $('dldb').onclick=function(){if(DBX)saveOut(DBX.name,DBX.raw,'db')};
 })();
