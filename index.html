@@ -215,6 +215,7 @@ function editNat(pid){
 function dbInfo(){var np=Object.keys(DB.p).length,nt=Object.keys(DB.t).length;
   $('dbs').textContent=np?('fifa.db carregado: '+np+' jogadores e '+nt+' times.'):''}
 
+/*FIFEDIT-SHIRT-FIX*/
 function parse(b){
   var dv=new DataView(b.buffer,b.byteOffset,b.byteLength);
   for(var p=0;p+20<=b.length;p+=4){
@@ -222,7 +223,7 @@ function parse(b){
       var sz=dv.getUint32(p+8,true),c=dv.getUint32(p+12,true);
       if(c>1000&&sz===c*16+8){
         var rows=[],teams={};
-        for(var i=0;i<c;i++){var o=p+20+16*i,t=dv.getUint32(o,true);rows.push({o:o,t:t,p:dv.getUint32(o+4,true),n:(b[o+8]&1)?(b[o+8]>>1)+1:0});(teams[t]=teams[t]||[]).push(i)}
+        for(var i=0;i<c;i++){var o=p+20+16*i,t=dv.getUint32(o,true);rows.push({o:o,t:t,p:dv.getUint32(o+4,true),n:(b[o+8]>>1)+1});(teams[t]=teams[t]||[]).push(i)}
         return{u8:b,rows:rows,teams:teams};
       }
     }
@@ -556,7 +557,7 @@ async function saveOut(name,data,slot){
 }
 $('dl').onclick=async function(){
   var out=new Uint8Array(S.u8);
-  for(var i=0;i<cur.length;i++)if(cur[i]!==orig[i]){if(!(cur[i]>=1&&cur[i]<=99)){$('err').textContent='Número inválido: use de 1 a 99.';return}var o=S.rows[i].o+8;out[o]=((cur[i]-1)<<1)|1}
+  for(var i=0;i<cur.length;i++)if(cur[i]!==orig[i]){if(!(cur[i]>=1&&cur[i]<=99)){$('err').textContent='Número inválido: use de 1 a 99.';return}var o=S.rows[i].o+8;out[o]=((cur[i]-1)<<1)|(out[o]&1)}
   stampCrc(out);
   var okd=await saveOut(fname,out,'save');
   if(okd===true){S.u8=out;MONEYD=false;orig=cur.slice();draw();upd()}
