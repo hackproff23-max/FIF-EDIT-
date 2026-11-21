@@ -27,6 +27,10 @@ label{display:block;font-size:13px;color:var(--mu);margin:8px 0 4px}
 .bar span{display:block;font-size:13px;color:var(--mu)}.bar .btn{margin-top:6px}
 textarea.in{min-height:70px;font-size:13px}
 details summary{cursor:pointer;font-weight:600}
+.edm{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:50;display:none;align-items:flex-start;justify-content:center;overflow:auto;padding:14px}
+.edm.on{display:flex}.edb{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px;width:100%;max-width:520px}
+.edb h2{font-size:17px}.edf{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:8px 0}
+.edf span{font-size:14px}.edf .num{width:84px}.pend{color:var(--mu);font-size:12px;margin-top:10px}
 </style>
 </head>
 <body>
@@ -69,9 +73,11 @@ details summary{cursor:pointer;font-weight:600}
       <button class="btn sec" id="exp">Copiar meus nomes</button>
     </details>
   </div>
-  <div class="card" id="list"></div>
+  <div class="card" id="si" hidden></div>
+<div class="card" id="list"></div>
 </div>
 
+<div class="edm" id="edm"><div class="edb" id="edb"></div></div>
 <div class="bar" id="bar" hidden><span id="cnt"></span><button class="btn sec" id="dldb" hidden>Baixar fifa.db</button><button class="btn" id="dl" disabled>Baixar save editado</button></div>
 
 <script>
@@ -245,6 +251,7 @@ $('f').onchange=function(){readF(this,function(b,n){
   cur=s.rows.map(function(r){return r.n});orig=cur.slice();
   ct=S.teams[73]?73:+Object.keys(S.teams)[0];
   fillTeams();$('ed').hidden=false;$('bar').hidden=false;draw();upd();
+  SAVEB=b;try{$('si').innerHTML=saveInfoHtml(b,n);$('si').hidden=false}catch(e){}
   if(Object.keys(DB.p).length){var m=0,u={};s.rows.forEach(function(r){if(!u[r.p]){u[r.p]=1;if(DB.p[r.p])m++}});
     var tot=Object.keys(u).length;$('err').textContent='';$('dbs').textContent='fifa.db: '+m+' de '+tot+' jogadores do save reconhecidos.'}
   else $('err').textContent='Dica: carregue o fifa.db no passo 1 para ver os nomes.';
@@ -270,7 +277,7 @@ function draw(){
   idx.forEach(function(i){
     var dup=cur[i]&&cn[cur[i]]>1;if(dup)d++;
     var nw=isNew(i);
-    h+='<div class="row'+(cur[i]!==orig[i]?' ch':(nw?' nw':''))+'"><div class="pid"><b data-p="'+S.rows[i].p+'">'+esc(pn(S.rows[i].p))+(nw?'<span class="tag">NOVO</span>':'')+'</b><small><span data-nat="'+S.rows[i].p+'" style="text-decoration:underline dotted">'+natTxt(S.rows[i].p)+'</span>ID '+S.rows[i].p+' · '+(orig[i]?'camisa '+orig[i]:'sem número')+'</small></div>'+
+    h+='<div class="row'+(cur[i]!==orig[i]?' ch':(nw?' nw':''))+'"><div class="pid"><b data-p="'+S.rows[i].p+'">'+esc(pn(S.rows[i].p))+(nw?'<span class="tag">NOVO</span>':'')+'</b><small><span data-nat="'+S.rows[i].p+'" style="text-decoration:underline dotted">'+natTxt(S.rows[i].p)+'</span>ID '+S.rows[i].p+' · '+(orig[i]?'camisa '+orig[i]:'sem número')+'</small></div>'+'<button class="btn sec" style="width:auto;margin:0;padding:8px 10px" data-ed="'+S.rows[i].p+'">✎</button>'+
        '<input class="num'+(dup?' dup':'')+'" type="text" inputmode="numeric" pattern="[1-9][0-9]?" maxlength="2" autocomplete="off" placeholder="-" value="'+(cur[i]||'')+'" data-i="'+i+'"></div>';
   });
   if(d)h+='<div class="warn">Há números repetidos neste time.</div>';
@@ -283,6 +290,7 @@ function draw(){
       cur[+this.dataset.i]=v;draw();upd()}});
   [].forEach.call($('list').querySelectorAll('b[data-p]'),function(el){el.onclick=function(){editName(this.dataset.p)}});
   [].forEach.call($('list').querySelectorAll('span[data-nat]'),function(el){el.onclick=function(){editNat(this.dataset.nat)}});
+  [].forEach.call($('list').querySelectorAll('button[data-ed]'),function(el){el.onclick=function(){openEd(this.dataset.ed)}});
 }
 function rawStr(id,key){var m=DBX.pm[id];if(!m||!m[key])return null;var b=DBX.raw,ptr=m[key],dv=new DataView(b.buffer,b.byteOffset,b.byteLength);
   var cap=dv.getUint16(ptr,true),t=ptr+2,e=t;while(e<t+cap&&b[e])e++;return{ptr:ptr,cap:cap,txt:new TextDecoder().decode(b.subarray(t,e))}}
@@ -318,6 +326,73 @@ function editName(id){
   idbPut('db',{name:DBX.name,raw:DBX.raw}).catch(function(){});
   DBX.dirty=true;$('dldb').hidden=false;$('err').textContent='Nome alterado. Toque em "Baixar fifa.db" para salvar.';draw();
 }
+/*FIFEDIT-PLAYER-EDITOR*/
+var EDF=[
+  {k:'gkdiving',n:'Goleiro · Elasticidade (ELA)',s:439,w:7},
+  {k:'gkpositioning',n:'Goleiro · Posicionamento (POS)',s:448,w:7},
+  {k:'handling',n:'Goleiro · Manejo (MAN)',s:457,w:7}
+];
+function rdBits(b,r,s,w){var v=0;for(var i=0;i<w;i++){var t=s+i;v|=((b[r+(t>>3)]>>(t&7))&1)<<i}return v}
+function wrBits(b,r,s,w,v){for(var i=0;i<w;i++){var t=s+i,y=r+(t>>3),m=1<<(t&7);if((v>>i)&1)b[y]|=m;else b[y]&=(~m)&255}}
+/*FIFEDIT-SAVE-INFO*/
+var SAVEB=null;
+function hx(v){return ('00000000'+(v>>>0).toString(16)).slice(-8)}
+function saveInfoHtml(b,name){
+  var dv=new DataView(b.buffer,b.byteOffset,b.byteLength),h='<h2>Dados do save</h2>';
+  var txt='';for(var i=0;i<Math.min(200,b.length);i++)txt+=b[i]>=32&&b[i]<127?String.fromCharCode(b[i]):'\n';
+  var ds=txt.match(/\d{1,2}\/\d{1,2}\/\d{4}( \d{1,2}:\d{2})?/g)||[];
+  var tm=dv.getUint32(8,true),rows=0,pl={},tms={};
+  if(S){S.rows.forEach(function(r){pl[r.p]=1;tms[r.t]=1});rows=S.rows.length}
+  function li(k,v,st){return'<div class="edf"><span>'+esc(k)+'</span><span style="text-align:right">'+v+(st?' <span class="note">('+st+')</span>':'')+'</span></div>'}
+  h+=li('Arquivo',esc(name||'SAVECAREER'),'')+li('Tamanho',(b.length/1048576).toFixed(2)+' MB','');
+  h+=li('Seu time (ID '+tm+')',esc(tn(tm)),'confirmado: bate com o elenco do jogo');
+  ds.forEach(function(d,i){h+=li('Data no cabeçalho '+(i+1),esc(d),'texto legível; o significado não está confirmado')});
+  h+=li('Jogadores com time no save',Object.keys(pl).length+' ('+rows+' vínculos)','confirmado');
+  h+=li('Times com elenco no save',Object.keys(tms).length,'confirmado');
+  h+=li('Valor bruto no cabeçalho (byte 20)',dv.getUint32(20,true),'NÃO confirmado; pode ser orçamento ou não');
+  h+='<div class="note" style="margin-top:8px">Dinheiro (orçamento, salários, valor de mercado) e overall ainda não foram localizados no save com certeza, então não são mostrados como fato. O overall e o valor de mercado também não aparecem como campo: o jogo calcula.</div>';
+  return h}
+function rawRecs(pid){
+  if(!SAVEB)return 'Carregue o save (passo 2).';
+  var b=SAVEB,dv=new DataView(b.buffer,b.byteOffset,b.byteLength),o=[],n=0;
+  for(var p=0;p+4<=b.length&&n<40;p+=4)if(dv.getUint32(p,true)===pid){
+    n++;var ws=[];for(var k=-3;k<=5;k++){var q=p+4*k;ws.push(q>=0&&q+4<=b.length?hx(dv.getUint32(q,true)):'--------')}
+    o.push('@'+p+' (id na 4a palavra): '+ws.join(' '))}
+  return n?o.join('\n'):'Nenhum registro encontrado.'}
+function closeEd(){$('edm').classList.remove('on')}
+function openEd(pid){
+  pid=+pid;
+  if(!DBX||!DBX.pm[pid]){alert('Carregue o fifa.db primeiro (passo 1).');return}
+  var r=DBX.pm[pid].r,b=DBX.raw,nat=DB.n&&DB.n[pid],h='<h2>'+esc(pn(pid))+'</h2><div class="note">ID '+pid+'</div>';
+  h+='<button class="btn sec" id="ed_nm">Editar nomes</button>';
+  h+='<button class="btn sec" id="ed_nat">Nacionalidade: '+esc(nat&&DB.g&&DB.g.C[nat]?(flag(nat)+' '+cname(nat)):'—')+' (trocar)</button>';
+  h+='<h2 style="margin-top:14px">Atributos de goleiro</h2><div class="note">Valem 1 a 99. Só têm efeito em goleiros.</div>';
+  EDF.forEach(function(f,i){h+='<div class="edf"><span>'+esc(f.n)+'</span><input class="num" type="text" inputmode="numeric" maxlength="2" data-f="'+i+'" value="'+rdBits(b,r,f.s,f.w)+'"></div>'});
+  h+='<details style="margin-top:12px"><summary>Dados brutos deste jogador no save</summary><div class="note" style="margin:6px 0">Registros do save que citam o ID '+pid+'. São valores crus, ainda sem significado confirmado.</div><textarea class="in" id="ed_raw" readonly style="min-height:120px;font-family:monospace">'+esc(rawRecs(pid))+'</textarea></details>';
+  h+='<button class="btn" id="ed_ok">Salvar alterações</button><button class="btn sec" id="ed_x">Fechar</button>';
+  h+='<div class="pend"><b>Ainda não editáveis (posição dos bits não confirmada):</b> atributos de jogador de linha (aceleração, finalização, passe, marcação etc.), reflexos, potencial, altura, peso, idade/nascimento, posição preferida, pé, skill moves, perna ruim, traços. O overall não é um campo: o jogo calcula pelos atributos.</div>';
+  $('edb').innerHTML=h;$('edm').classList.add('on');
+  [].forEach.call($('edb').querySelectorAll('input[data-f]'),function(el){el.oninput=function(){var t=this.value.replace(/\D/g,'').slice(0,2);if(t!==this.value)this.value=t}});
+  $('ed_x').onclick=closeEd;
+  $('ed_raw')&&($('ed_raw').onclick=function(){this.select()});
+  $('ed_nm').onclick=function(){closeEd();editName(String(pid))};
+  $('ed_nat').onclick=function(){closeEd();editNat(String(pid))};
+  $('ed_ok').onclick=function(){
+    var ch=[],bad=false,rr=DBX.pm[pid].r,bb=DBX.raw;
+    [].forEach.call($('edb').querySelectorAll('input[data-f]'),function(el){
+      var f=EDF[+el.dataset.f],v=parseInt(el.value,10);
+      if(isNaN(v)||v<1||v>99){bad=true;return}
+      if(v!==rdBits(bb,rr,f.s,f.w))ch.push([f,v])});
+    if(bad){alert('Use valores de 1 a 99.');return}
+    if(!ch.length){closeEd();return}
+    ch.forEach(function(c){wrBits(bb,rr,c[0].s,c[0].w,c[1])});
+    for(var i=0;i<ch.length;i++)if(rdBits(bb,rr,ch[i][0].s,ch[i][0].w)!==ch[i][1]){alert('Falha ao gravar '+ch[i][0].k+'.');return}
+    idbPut('db',{name:DBX.name,raw:DBX.raw}).catch(function(){});
+    DBX.dirty=true;$('dldb').hidden=false;
+    $('err').textContent='Jogador alterado. Toque em "'+$('dldb').textContent+'" para gravar no fifa.db.';
+    closeEd();draw()};
+}
+$('edm').onclick=function(e){if(e.target===this)closeEd()};
 function nch(){var c=0;for(var i=0;i<cur.length;i++)if(cur[i]!==orig[i])c++;return c}
 function upd(){var c=nch();$('cnt').textContent=c+(c===1?' alteração':' alterações');$('dl').disabled=!c}
 $('tm').onchange=function(){ct=+this.value;draw()};
